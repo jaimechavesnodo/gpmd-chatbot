@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Log — GPMD 2026</title>
+  <link rel="icon" href="/assets/img/favicon.png"/>
+  <link rel="stylesheet" href="/assets/css/main.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>📋 Log de Actividad</h1>
+      <p>Registro de todas las acciones automáticas y manuales del sistema</p>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2>Registros <span id="totalLabel" style="font-size:.8rem;color:#888;font-weight:400;"></span></h2>
+        <button class="btn btn-secondary btn-sm" onclick="cargar(1)">↻</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Entidad</th>
+            <th>ID Registro</th>
+            <th>Acción</th>
+            <th>Usuario / Fuente</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+      <div class="pagination" id="paginacion"></div>
+    </div>
+  </main>
+</div>
+
+<script src="/assets/js/auth.js"></script>
+<script>
+let paginaActual = 1;
+const LIMIT = 50;
+
+async function init() {
+  requireRole(['admin']);
+  renderSidebar('log');
+  await cargar(1);
+}
+
+async function cargar(page) {
+  paginaActual = page;
+  const res = await apiFetch(`/api/log?page=${page}&limit=${LIMIT}`);
+  if (!res) return;
+  const { data, total } = await res.json();
+  renderTabla(data);
+  renderPaginacion(total, page);
+  document.getElementById('totalLabel').textContent = `${total} registros totales`;
+}
+
+function renderTabla(rows) {
+  document.getElementById('logBody').innerHTML = rows.length
+    ? rows.map(r => `
+        <tr>
+          <td style="white-space:nowrap;font-size:.8rem;">${new Date(r.created_at).toLocaleString('es-CO',{timeZone:'America/Bogota'})}</td>
+          <td><span class="badge badge-gris">${r.entidad||'—'}</span></td>
+          <td style="font-family:monospace;font-size:.78rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.entidad_id||'—'}</td>
+          <td style="font-size:.82rem;">${formatAccion(r.accion)}</td>
+          <td style="font-size:.82rem;">${r.usuario ? r.usuario.nombre : '<span style="color:#888">Sistema</span>'} · <span class="badge ${r.fuente==='manual'?'badge-azul':'badge-gris'}">${r.fuente}</span></td>
+          <td style="font-size:.78rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${JSON.stringify(r.detalle)}">${r.detalle ? JSON.stringify(r.detalle).slice(0,80) : '—'}</td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#888;padding:2rem;">Sin registros</td></tr>';
+}
+
+function formatAccion(a) {
+  const map = {
+    ocr_auto_aprobado: '✅ OCR Auto-aprobado',
+    ocr_auto_rechazado: '❌ OCR Auto-rechazado',
+    ocr_enviado_revision: '⚠️ Enviado a revisión',
+    manual_aprobado: '✅ Aprobado manual',
+    manual_rechazado: '❌ Rechazado manual',
+    slot_reservado: '📅 Slot reservado',
+    slot_reservado_manual: '📅 Slot manual',
+    slot_liberado: '🔓 Slot liberado',
+  };
+  return map[a] || a;
+}
+
+function renderPaginacion(total, page) {
+  const pages = Math.ceil(total / LIMIT);
+  if (pages <= 1) { document.getElementById('paginacion').innerHTML = ''; return; }
+  let html = '';
+  for (let i = 1; i <= pages; i++) {
+    html += `<button class="${i===page?'active':''}" onclick="cargar(${i})">${i}</button>`;
+  }
+  document.getElementById('paginacion').innerHTML = html;
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+{
+  "name": "wf-gpmd-05-procesar-factura",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gpmd/procesar-factura",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst headers = $input.first().json.headers || {};\n\nif (headers['x-gpmd-secret'] !== 'GPMD_WEBHOOK_SECRET') {\n  return [{ json: { ok: 'false', error: 'Unauthorized' } }];\n}\n\nconst phone = (body.phone || '').replace(/\\D/g, '');\nconst media_url = body.media_url || body.mediaUrl || '';\n\nif (!phone || !media_url) {\n  return [{ json: { ok: 'false', error: 'phone y media_url requeridos' } }];\n}\n\nreturn [{ json: { phone, media_url } }];"
+      },
+      "id": "validate",
+      "name": "Validar Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, nombre_piloto FROM gpmd_participants WHERE phone=$1 LIMIT 1",
+        "additionalFields": { "queryParams": "={{ JSON.stringify([$json.phone]) }}" },
+        "options": { "alwaysOutputData": true }
+      },
+      "id": "get-participant",
+      "name": "Obtener Participante",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-opus-4-8\",\n  \"max_tokens\": 1024,\n  \"system\": \"Eres un experto en lectura de facturas de venta de lubricantes en Colombia. Analiza la imagen de factura y extrae EXACTAMENTE los siguientes campos en formato JSON. Si no puedes leer un campo con certeza, usa null. Evalúa la confianza general (0.0 a 1.0) basándote en la legibilidad de la imagen y la completitud de los datos. Productos válidos: cualquier referencia Mobil Delvac (Mobil Delvac 1300, Mobil Delvac MX, Mobil Delvac 15W-40, Mobil Delvac 25W-50, etc.). Presentación válida: Balde (también puede aparecer como Bdo, Bal, x20L, tambor, cuñete). Responde SOLO con el JSON, sin texto adicional.\",\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": [{\n      \"type\": \"image\",\n      \"source\": { \"type\": \"url\", \"url\": \"{{ $('Validar Input').first().json.media_url }}\" }\n    }, {\n      \"type\": \"text\",\n      \"text\": \"Extrae los datos de esta factura y responde en JSON con los campos: establecimiento (nombre del negocio), ciudad, fecha_compra (formato YYYY-MM-DD), referencia_producto (nombre exacto del producto Mobil), presentacion (Balde/Galón/Cuarto/Otro), cantidad (número), valor_total (número sin símbolos), es_producto_valido (true/false - debe ser Mobil Delvac), es_presentacion_valida (true/false - debe ser Balde), confianza (0.0-1.0), motivo_baja_confianza (string o null)\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "claude-ocr",
+      "name": "Claude Vision OCR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ocrResponse = $('Claude Vision OCR').first().json;\nconst participant = $('Obtener Participante').first().json;\nconst input = $('Validar Input').first().json;\n\nlet ocr = {};\ntry {\n  const text = ocrResponse?.content?.[0]?.text || '{}';\n  const cleaned = text.replace(/```json\\n?|```/g, '').trim();\n  ocr = JSON.parse(cleaned);\n} catch(e) {\n  ocr = { confianza: 0.0, motivo_baja_confianza: 'No se pudo parsear respuesta OCR' };\n}\n\nconst confianza = parseFloat(ocr.confianza) || 0.0;\nconst esProductoValido = ocr.es_producto_valido === true;\nconst esPresentacionValida = ocr.es_presentacion_valida === true;\nconst fechaOk = !!ocr.fecha_compra;\n\n// Determinar si pasa automáticamente\nconst CONFIANZA_MIN = 0.70;\nconst pasaAuto = confianza >= CONFIANZA_MIN && esProductoValido && esPresentacionValida && fechaOk;\n\nlet motivo = null;\nif (!pasaAuto) {\n  const razones = [];\n  if (confianza < CONFIANZA_MIN) razones.push(`Confianza OCR baja (${Math.round(confianza*100)}%)`);\n  if (!esProductoValido) razones.push('Producto no identificado como Mobil Delvac');\n  if (!esPresentacionValida) razones.push('Presentación no es Balde');\n  if (!fechaOk) razones.push('Fecha de compra no legible');\n  motivo = razones.join('; ');\n}\n\nreturn [{ json: {\n  participant_id: participant?.id,\n  phone: input.phone,\n  media_url: input.media_url,\n  ocr,\n  confianza,\n  pasaAuto: pasaAuto ? 'true' : 'false',\n  motivo,\n  estado: pasaAuto ? 'aprobada_auto' : 'en_revision',\n} }];"
+      },
+      "id": "evaluar-ocr",
+      "name": "Evaluar OCR",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO gpmd_facturas (participant_id, imagen_url, ocr_raw, ocr_establecimiento, ocr_ciudad, ocr_fecha_compra, ocr_referencia_producto, ocr_presentacion, ocr_cantidad, ocr_valor_total, ocr_confianza, ocr_motivo_revision, establecimiento, ciudad, fecha_compra, referencia_producto, presentacion, cantidad, valor_total, estado)\nVALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::date,$17,$18,$19,$20)\nRETURNING id",
+        "additionalFields": {
+          "queryParams": "={{ JSON.stringify([\n  $json.participant_id,\n  $json.media_url,\n  JSON.stringify($json.ocr),\n  $json.ocr.establecimiento || null,\n  $json.ocr.ciudad || null,\n  $json.ocr.fecha_compra || null,\n  $json.ocr.referencia_producto || null,\n  $json.ocr.presentacion || null,\n  $json.ocr.cantidad || null,\n  $json.ocr.valor_total || null,\n  $json.confianza,\n  $json.motivo,\n  $json.pasaAuto === 'true' ? $json.ocr.establecimiento || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.ciudad || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.fecha_compra || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.referencia_producto || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.presentacion || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.cantidad || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.valor_total || null : null,\n  $json.estado\n]) }}"
+        }
+      },
+      "id": "insert-factura",
+      "name": "Guardar Factura",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE gpmd_participants SET estado=$1, updated_at=NOW() WHERE id=$2",
+        "additionalFields": {
+          "queryParams": "={{ JSON.stringify([\n  $('Evaluar OCR').first().json.pasaAuto === 'true' ? 'aprobado' : 'factura_en_revision',\n  $('Evaluar OCR').first().json.participant_id\n]) }}"
+        }
+      },
+      "id": "update-participant",
+      "name": "Actualizar Participante",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ev = $('Evaluar OCR').first().json;\nreturn [{ json: {\n  ok: 'true',\n  resultado: ev.estado,\n  pasa_auto: ev.pasaAuto,\n  motivo: ev.motivo,\n  mensaje: ev.pasaAuto === 'true'\n    ? '¡Tu factura fue verificada exitosamente! Tu registro en el Gran Premio Mobil Delvac 2026 está COMPLETO. 🏁'\n    : 'Recibimos tu factura y está siendo revisada por nuestro equipo. Te notificaremos en máximo 24 horas. ⏳',\n} }];"
+      },
+      "id": "build-response",
+      "name": "Construir Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {} },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Validar Input", "type": "main", "index": 0 }]] },
+    "Validar Input": { "main": [[{ "node": "Obtener Participante", "type": "main", "index": 0 }]] },
+    "Obtener Participante": { "main": [[{ "node": "Claude Vision OCR", "type": "main", "index": 0 }]] },
+    "Claude Vision OCR": { "main": [[{ "node": "Evaluar OCR", "type": "main", "index": 0 }]] },
+    "Evaluar OCR": { "main": [[{ "node": "Guardar Factura", "type": "main", "index": 0 }]] },
+    "Guardar Factura": { "main": [[{ "node": "Actualizar Participante", "type": "main", "index": 0 }]] },
+    "Actualizar Participante": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
+    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gpmd" }]
+}

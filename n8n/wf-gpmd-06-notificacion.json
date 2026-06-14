@@ -1,0 +1,63 @@
+{
+  "name": "wf-gpmd-06-notificacion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gpmd/notificacion",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst headers = $input.first().json.headers || {};\n\nif (headers['x-gpmd-secret'] !== 'GPMD_WEBHOOK_SECRET') {\n  return [{ json: { ok: 'false', error: 'Unauthorized' } }];\n}\n\nconst { phone, estado, nombre, codigo, razon } = body;\nif (!phone || !estado) {\n  return [{ json: { ok: 'false', error: 'phone y estado requeridos' } }];\n}\n\nlet mensaje = '';\nconst razones_label = {\n  foto_ilegible: 'la foto no era legible',\n  fuera_periodo: 'la factura está fuera del período de participación',\n  producto_no_participante: 'el producto no es participante',\n  establecimiento_no_participante: 'el establecimiento no es participante',\n  factura_duplicada: 'la factura ya fue registrada anteriormente',\n  valor_insuficiente: 'el valor no cumple el mínimo requerido',\n  otro: 'ver detalle adjunto',\n};\n\nif (estado === 'aprobado') {\n  mensaje = `✅ *¡Felicitaciones, ${nombre || 'participante'}!*\\n\\n`\n    + `Tu registro en el *Gran Premio Mobil Delvac 2026* ha sido *APROBADO*.\\n\\n`\n    + `🏁 Código de preregistro: *${codigo || '—'}*\\n\\n`\n    + `Recuerda presentarte en el horario asignado con los documentos originales.\\n`\n    + `¡Mucha suerte en la pista! 🚛💨`;\n} else if (estado === 'rechazado') {\n  const razonLabel = razones_label[razon] || razon || 'revisar condiciones';\n  mensaje = `❌ *Hola ${nombre || 'participante'},*\\n\\n`\n    + `Lamentablemente tu factura no pudo ser aceptada porque ${razonLabel}.\\n\\n`\n    + `Si tienes dudas, responde este mensaje y un asesor te ayudará en menos de 24 horas.`;\n} else if (estado === 'en_revision') {\n  mensaje = `⏳ *Hola ${nombre || 'participante'},*\\n\\n`\n    + `Recibimos tu factura y la estamos revisando manualmente.\\n`\n    + `Te notificaremos en un máximo de 24 horas con el resultado.`;\n}\n\nreturn [{ json: { phone, mensaje } }];"
+      },
+      "id": "build-message",
+      "name": "Construir Mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WATI_API_URL }}/api/v1/sendSessionMessage/{{ $json.phone }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.WATI_API_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messageText: $json.mensaje }) }}",
+        "options": {}
+      },
+      "id": "send-wati",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={\"ok\":\"true\"}", "options": {} },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Construir Mensaje", "type": "main", "index": 0 }]] },
+    "Construir Mensaje": { "main": [[{ "node": "Enviar WhatsApp", "type": "main", "index": 0 }]] },
+    "Enviar WhatsApp": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gpmd" }]
+}

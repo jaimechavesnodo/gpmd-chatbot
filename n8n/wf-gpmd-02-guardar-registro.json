@@ -1,0 +1,70 @@
+{
+  "name": "wf-gpmd-02-guardar-registro",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gpmd/guardar-registro",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst headers = $input.first().json.headers || {};\n\nif (headers['x-gpmd-secret'] !== 'GPMD_WEBHOOK_SECRET') {\n  return [{ json: { ok: 'false', error: 'Unauthorized' } }];\n}\n\nconst phone = (body.phone || '').replace(/\\D/g, '');\nconst cedula = (body.cedula || '').trim();\n\nif (!phone || !cedula) {\n  return [{ json: { ok: 'false', error: 'phone y cedula requeridos' } }];\n}\n\n// Generar código único GPMD-XXXXXX\nconst chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';\nlet code = 'GPMD-';\nfor (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];\n\nreturn [{ json: {\n  phone,\n  cedula,\n  nombre_piloto: body.nombre_piloto || '',\n  edad: parseInt(body.edad) || null,\n  tipo_participacion: body.tipo_participacion || 'novato',\n  participaciones_anteriores: parseInt(body.participaciones_anteriores) || 0,\n  rh: body.rh || '',\n  eps: body.eps || '',\n  ciudad: body.ciudad || '',\n  departamento: body.departamento || '',\n  email: body.email || '',\n  nombre_copiloto: body.nombre_copiloto || '',\n  vehiculo_marca: body.vehiculo_marca || '',\n  vehiculo_modelo: body.vehiculo_modelo || '',\n  vehiculo_cilindrada: body.vehiculo_cilindrada || '',\n  vehiculo_empresa: body.vehiculo_empresa || '',\n  vehiculo_placa: (body.vehiculo_placa || '').toUpperCase(),\n  codigo_preregistro: code,\n  estado: 'slot_pendiente',\n} }];"
+      },
+      "id": "validate",
+      "name": "Validar y Preparar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO gpmd_participants (phone, cedula, nombre_piloto, edad, tipo_participacion, participaciones_anteriores, rh, eps, ciudad, departamento, email, nombre_copiloto, vehiculo_marca, vehiculo_modelo, vehiculo_cilindrada, vehiculo_empresa, vehiculo_placa, codigo_preregistro, estado)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)\nON CONFLICT (phone) DO UPDATE SET\n  cedula=EXCLUDED.cedula, nombre_piloto=EXCLUDED.nombre_piloto, edad=EXCLUDED.edad,\n  tipo_participacion=EXCLUDED.tipo_participacion, participaciones_anteriores=EXCLUDED.participaciones_anteriores,\n  rh=EXCLUDED.rh, eps=EXCLUDED.eps, ciudad=EXCLUDED.ciudad, departamento=EXCLUDED.departamento,\n  email=EXCLUDED.email, nombre_copiloto=EXCLUDED.nombre_copiloto,\n  vehiculo_marca=EXCLUDED.vehiculo_marca, vehiculo_modelo=EXCLUDED.vehiculo_modelo,\n  vehiculo_cilindrada=EXCLUDED.vehiculo_cilindrada, vehiculo_empresa=EXCLUDED.vehiculo_empresa,\n  vehiculo_placa=EXCLUDED.vehiculo_placa, updated_at=NOW()\nRETURNING id, codigo_preregistro, estado",
+        "additionalFields": {
+          "queryParams": "={{ JSON.stringify([\n  $json.phone, $json.cedula, $json.nombre_piloto, $json.edad, $json.tipo_participacion,\n  $json.participaciones_anteriores, $json.rh, $json.eps, $json.ciudad, $json.departamento,\n  $json.email, $json.nombre_copiloto, $json.vehiculo_marca, $json.vehiculo_modelo,\n  $json.vehiculo_cilindrada, $json.vehiculo_empresa, $json.vehiculo_placa,\n  $json.codigo_preregistro, $json.estado\n]) }}"
+        }
+      },
+      "id": "upsert",
+      "name": "Upsert Participante",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $('Upsert Participante').first().json;\nreturn [{ json: {\n  ok: 'true',\n  participant_id: row.id,\n  codigo: row.codigo_preregistro,\n  estado: row.estado,\n} }];"
+      },
+      "id": "build-response",
+      "name": "Construir Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {} },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Validar y Preparar", "type": "main", "index": 0 }]] },
+    "Validar y Preparar": { "main": [[{ "node": "Upsert Participante", "type": "main", "index": 0 }]] },
+    "Upsert Participante": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
+    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gpmd" }]
+}

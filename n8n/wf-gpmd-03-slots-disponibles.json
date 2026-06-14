@@ -1,0 +1,58 @@
+{
+  "name": "wf-gpmd-03-slots-disponibles",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gpmd/slots-disponibles",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT fecha, franja, hora_inicio, hora_fin, COUNT(*) AS disponibles FROM gpmd_slots WHERE participant_id IS NULL GROUP BY fecha, franja, hora_inicio, hora_fin ORDER BY fecha, franja",
+        "additionalFields": {},
+        "options": { "alwaysOutputData": true }
+      },
+      "id": "query-slots",
+      "name": "Query Slots",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [460, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('Query Slots').all().map(i => i.json);\n\nconst labels = {\n  '2026-07-21': 'Martes 21 de julio',\n  '2026-07-22': 'Miércoles 22 de julio',\n  '2026-07-23': 'Jueves 23 de julio',\n  '2026-07-24': 'Viernes 24 de julio',\n};\n\nconst opciones = rows.map(r => {\n  const fechaStr = typeof r.fecha === 'string' ? r.fecha.slice(0,10) : new Date(r.fecha).toISOString().slice(0,10);\n  return `${labels[fechaStr] || fechaStr} - ${r.franja} (${r.disponibles} disponibles)`;\n}).join('\\n');\n\nif (!rows.length) {\n  return [{ json: { ok: 'true', hay_slots: 'false', mensaje: 'No hay turnos disponibles en este momento.' } }];\n}\n\nreturn [{ json: {\n  ok: 'true',\n  hay_slots: 'true',\n  total_disponibles: String(rows.reduce((a,r) => a + parseInt(r.disponibles||0), 0)),\n  opciones,\n  slots: JSON.stringify(rows),\n} }];"
+      },
+      "id": "build-response",
+      "name": "Construir Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {} },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Query Slots", "type": "main", "index": 0 }]] },
+    "Query Slots": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
+    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gpmd" }]
+}

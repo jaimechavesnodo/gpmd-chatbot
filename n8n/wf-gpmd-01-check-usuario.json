@@ -1,0 +1,75 @@
+{
+  "name": "wf-gpmd-01-check-usuario",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gpmd/check-usuario",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst headers = $input.first().json.headers || {};\n\nconst token = headers['x-gpmd-secret'];\nif (token !== 'GPMD_WEBHOOK_SECRET') {\n  return [{ json: { ok: 'false', error: 'Unauthorized' } }];\n}\n\nconst phone = (body.phone || '').replace(/\\D/g, '');\nconst cedula = (body.cedula || '').trim();\n\nif (!phone) {\n  return [{ json: { ok: 'false', error: 'phone requerido' } }];\n}\n\nreturn [{ json: { phone, cedula } }];"
+      },
+      "id": "validate-input",
+      "name": "Validar Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, phone, cedula, nombre_piloto, estado, codigo_preregistro FROM gpmd_participants WHERE phone = $1 LIMIT 1",
+        "additionalFields": {
+          "queryParams": "={{ JSON.stringify([$('Validar Input').first().json.phone]) }}"
+        },
+        "options": { "alwaysOutputData": true }
+      },
+      "id": "buscar-participante",
+      "name": "Buscar Participante",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const participant = $('Buscar Participante').first().json;\nconst phone = $('Validar Input').first().json.phone;\n\nif (!participant || !participant.id) {\n  return [{ json: { ok: 'true', existe: 'false', phone } }];\n}\n\nreturn [{ json: {\n  ok: 'true',\n  existe: 'true',\n  phone,\n  estado: participant.estado || '',\n  nombre: participant.nombre_piloto || '',\n  codigo: participant.codigo_preregistro || '',\n} }];"
+      },
+      "id": "build-response",
+      "name": "Construir Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Validar Input", "type": "main", "index": 0 }]] },
+    "Validar Input": { "main": [[{ "node": "Buscar Participante", "type": "main", "index": 0 }]] },
+    "Buscar Participante": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
+    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gpmd" }]
+}

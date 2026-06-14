@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — GPMD 2026</title>
+  <link rel="icon" href="/assets/img/favicon.png"/>
+  <link rel="stylesheet" href="/assets/css/main.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;">
+      <div>
+        <h1>📊 Dashboard</h1>
+        <p>Resumen general del Gran Premio Mobil Delvac 2026</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="cargarDatos()">↻ Actualizar</button>
+    </div>
+
+    <!-- KPIs principales -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card"><div class="kpi-label">Cargando...</div></div>
+    </div>
+
+    <!-- Facturas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;">
+      <div class="table-wrap" style="padding:1.25rem;">
+        <div style="font-weight:700;margin-bottom:1rem;">Estado de Facturas</div>
+        <canvas id="chartFacturas" height="200"></canvas>
+      </div>
+      <div class="table-wrap" style="padding:1.25rem;">
+        <div style="font-weight:700;margin-bottom:1rem;">Causas de Rechazo</div>
+        <canvas id="chartRechazos" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- Agenda por día -->
+    <div class="table-wrap" style="padding:1.25rem;margin-bottom:1.25rem;">
+      <div style="font-weight:700;margin-bottom:1rem;">Ocupación de Turnos por Día y Franja</div>
+      <canvas id="chartAgenda" height="120"></canvas>
+    </div>
+
+    <!-- Referencias de producto -->
+    <div class="table-wrap" style="margin-bottom:1.25rem;">
+      <div class="table-header"><h2>Referencias de Producto Registradas</h2></div>
+      <table>
+        <thead><tr><th>Referencia</th><th>Frecuencia</th></tr></thead>
+        <tbody id="tablaReferencias"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="/assets/js/auth.js"></script>
+<script>
+let chartFacturas, chartRechazos, chartAgenda;
+
+async function init() {
+  requireRole(['admin','cliente']);
+  renderSidebar('dashboard');
+  await cargarDatos();
+}
+
+async function cargarDatos() {
+  const res = await apiFetch('/api/dashboard');
+  if (!res) return;
+  const d = await res.json();
+  renderKPIs(d);
+  renderChartFacturas(d.facturas);
+  renderChartRechazos(d.causas_rechazo);
+  renderChartAgenda(d.agenda);
+  renderReferencias(d.referencias);
+}
+
+function renderKPIs(d) {
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">Participantes Registrados</div><div class="kpi-value">${d.total_participantes}</div></div>
+    <div class="kpi-card verde"><div class="kpi-label">Aprobados</div><div class="kpi-value">${d.aprobados}</div></div>
+    <div class="kpi-card" style="border-left-color:#dc2626"><div class="kpi-label">Rechazados</div><div class="kpi-value">${d.rechazados}</div></div>
+    <div class="kpi-card amarillo"><div class="kpi-label">En Revisión</div><div class="kpi-value">${d.en_revision}</div></div>
+    <div class="kpi-card azul"><div class="kpi-label">Facturas Aprobadas Auto</div><div class="kpi-value">${d.facturas.aprobada_auto}</div></div>
+    <div class="kpi-card azul"><div class="kpi-label">Facturas Aprobadas Manual</div><div class="kpi-value">${d.facturas.aprobada_manual}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Turnos Agendados</div><div class="kpi-value">${d.agenda.reduce((a,x) => a + x.agendados, 0)}</div></div>
+    <div class="kpi-card verde"><div class="kpi-label">Turnos Disponibles</div><div class="kpi-value">${d.agenda.reduce((a,x) => a + (x.total - x.agendados), 0)}</div></div>
+  `;
+}
+
+function renderChartFacturas(f) {
+  const ctx = document.getElementById('chartFacturas').getContext('2d');
+  if (chartFacturas) chartFacturas.destroy();
+  chartFacturas = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Aprobadas Auto', 'Aprobadas Manual', 'Rechazadas', 'En Revisión', 'Pendientes'],
+      datasets: [{ data: [f.aprobada_auto, f.aprobada_manual, f.rechazada, f.en_revision, f.pendiente],
+        backgroundColor: ['#16a34a','#2563eb','#dc2626','#ca8a04','#9ca3af'] }],
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } },
+  });
+}
+
+function renderChartRechazos(causas) {
+  const ctx = document.getElementById('chartRechazos').getContext('2d');
+  if (chartRechazos) chartRechazos.destroy();
+  const labels = { foto_ilegible:'Foto ilegible', fuera_periodo:'Fuera de período', producto_no_participante:'Producto no participante', establecimiento_no_participante:'Estab. no participante', factura_duplicada:'Duplicada', valor_insuficiente:'Valor insuficiente', otro:'Otro' };
+  chartRechazos = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: causas.map(c => labels[c.causa] || c.causa),
+      datasets: [{ label: 'Rechazos', data: causas.map(c => c.n), backgroundColor: '#dc2626' }],
+    },
+    options: { indexAxis:'y', plugins:{ legend:{display:false} }, scales:{ x:{beginAtZero:true,ticks:{stepSize:1}} } },
+  });
+}
+
+function renderChartAgenda(agenda) {
+  const ctx = document.getElementById('chartAgenda').getContext('2d');
+  if (chartAgenda) chartAgenda.destroy();
+  const dias = ['2026-07-21','2026-07-22','2026-07-23','2026-07-24'];
+  const labDias = ['Mar 21','Mié 22','Jue 23','Vie 24'];
+  const am_total = dias.map(d => agenda.find(a => a.fecha===d && a.franja==='AM')?.total || 0);
+  const am_agend = dias.map(d => agenda.find(a => a.fecha===d && a.franja==='AM')?.agendados || 0);
+  const pm_total = dias.map(d => agenda.find(a => a.fecha===d && a.franja==='PM')?.total || 0);
+  const pm_agend = dias.map(d => agenda.find(a => a.fecha===d && a.franja==='PM')?.agendados || 0);
+  chartAgenda = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labDias,
+      datasets: [
+        { label:'AM Agendados', data: am_agend, backgroundColor:'#E30613' },
+        { label:'AM Disponibles', data: am_total.map((t,i) => t - am_agend[i]), backgroundColor:'#fca5a5' },
+        { label:'PM Agendados', data: pm_agend, backgroundColor:'#1d4ed8' },
+        { label:'PM Disponibles', data: pm_total.map((t,i) => t - pm_agend[i]), backgroundColor:'#93c5fd' },
+      ],
+    },
+    options: { scales:{ x:{ stacked:true }, y:{ stacked:true, beginAtZero:true } }, plugins:{ legend:{position:'bottom'} } },
+  });
+}
+
+function renderReferencias(refs) {
+  document.getElementById('tablaReferencias').innerHTML = refs.length
+    ? refs.map(r => `<tr><td>${r.ref}</td><td>${r.n}</td></tr>`).join('')
+    : '<tr><td colspan="2" style="text-align:center;color:#888;">Sin datos aún</td></tr>';
+}
+
+init();
+</script>
+</body>
+</html>

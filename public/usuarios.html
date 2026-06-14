@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Usuarios — GPMD 2026</title>
+  <link rel="icon" href="/assets/img/favicon.png"/>
+  <link rel="stylesheet" href="/assets/css/main.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;">
+      <div>
+        <h1>👥 Usuarios del Sistema</h1>
+        <p>Gestión de accesos al panel administrativo</p>
+      </div>
+      <button class="btn btn-primary" onclick="abrirModal()">+ Nuevo Usuario</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Último Login</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- Modal crear/editar -->
+<div class="modal-overlay" id="modalUser">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarModal()">×</button>
+    <h2 id="modalTitle">Nuevo Usuario</h2>
+
+    <div class="form-group">
+      <label class="form-label">Nombre completo *</label>
+      <input class="form-control" id="u_nombre"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Correo electrónico *</label>
+      <input class="form-control" type="email" id="u_email"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña <span id="pwdNote" style="font-weight:400;color:#888;">(requerida)</span></label>
+      <input class="form-control" type="password" id="u_password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Rol *</label>
+      <select class="form-control" id="u_rol">
+        <option value="admin">Administrador — acceso completo</option>
+        <option value="cliente">Cliente — agenda y dashboard (solo lectura)</option>
+        <option value="agente">Agente — solo aprobador de facturas</option>
+      </select>
+    </div>
+    <div class="form-group" id="activoGroup" style="display:none;">
+      <label class="form-label">Estado</label>
+      <select class="form-control" id="u_activo">
+        <option value="true">Activo</option>
+        <option value="false">Inactivo</option>
+      </select>
+    </div>
+
+    <p id="formError" style="color:#E30613;font-size:.85rem;margin-bottom:.5rem;display:none;"></p>
+    <div style="display:flex;gap:.75rem;">
+      <button class="btn btn-primary" onclick="guardar()" id="btnGuardar">Guardar</button>
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/js/auth.js"></script>
+<script>
+let editId = null, myId = null;
+
+async function init() {
+  const u = requireRole(['admin']);
+  if (!u) return;
+  myId = u.id;
+  renderSidebar('usuarios');
+  await cargar();
+}
+
+async function cargar() {
+  const res = await apiFetch('/api/usuarios');
+  if (!res) return;
+  const users = await res.json();
+  renderTabla(users);
+}
+
+function renderTabla(users) {
+  document.getElementById('usersBody').innerHTML = users.length
+    ? users.map(u => `
+        <tr>
+          <td>${u.nombre}</td>
+          <td>${u.email}</td>
+          <td><span class="badge ${rolBadge(u.rol)}">${u.rol}</span></td>
+          <td><span class="badge ${u.activo?'badge-verde':'badge-gris'}">${u.activo?'Activo':'Inactivo'}</span></td>
+          <td style="font-size:.8rem;">${u.ultimo_login ? new Date(u.ultimo_login).toLocaleString('es-CO',{timeZone:'America/Bogota'}) : '—'}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="abrirModal(${JSON.stringify(u).replace(/"/g,'&quot;')})">Editar</button>
+            ${u.id !== myId ? `<button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;margin-left:.3rem;" onclick="eliminar(${u.id},'${u.nombre}')">Eliminar</button>` : ''}
+          </td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#888;padding:2rem;">Sin usuarios</td></tr>';
+}
+
+function rolBadge(r) { return {admin:'badge-rojo',cliente:'badge-azul',agente:'badge-amarillo'}[r]||'badge-gris'; }
+
+function abrirModal(user) {
+  editId = user?.id || null;
+  document.getElementById('modalTitle').textContent = editId ? 'Editar Usuario' : 'Nuevo Usuario';
+  document.getElementById('u_nombre').value   = user?.nombre || '';
+  document.getElementById('u_email').value    = user?.email  || '';
+  document.getElementById('u_rol').value      = user?.rol    || 'agente';
+  document.getElementById('u_activo').value   = String(user?.activo ?? true);
+  document.getElementById('u_password').value = '';
+  document.getElementById('activoGroup').style.display = editId ? 'block' : 'none';
+  document.getElementById('pwdNote').textContent = editId ? '(dejar en blanco para no cambiar)' : '(requerida)';
+  document.getElementById('formError').style.display = 'none';
+  document.getElementById('modalUser').classList.add('show');
+}
+
+function cerrarModal() { document.getElementById('modalUser').classList.remove('show'); }
+
+async function guardar() {
+  const nombre   = document.getElementById('u_nombre').value.trim();
+  const email    = document.getElementById('u_email').value.trim();
+  const password = document.getElementById('u_password').value;
+  const rol      = document.getElementById('u_rol').value;
+  const activo   = document.getElementById('u_activo').value === 'true';
+  const errEl    = document.getElementById('formError');
+  errEl.style.display = 'none';
+
+  if (!nombre || !email || !rol) { errEl.textContent = 'Nombre, email y rol son requeridos'; errEl.style.display = 'block'; return; }
+  if (!editId && !password) { errEl.textContent = 'La contraseña es requerida para nuevos usuarios'; errEl.style.display = 'block'; return; }
+  if (password && password.length < 8) { errEl.textContent = 'La contraseña debe tener al menos 8 caracteres'; errEl.style.display = 'block'; return; }
+
+  const body = { nombre, email, rol };
+  if (password) body.password = password;
+  if (editId) body.activo = activo;
+
+  const res = await apiFetch(editId ? `/api/usuarios/${editId}` : '/api/usuarios', {
+    method: editId ? 'PATCH' : 'POST',
+    body: JSON.stringify(body),
+  });
+  const data = await res?.json();
+
+  if (res?.ok) {
+    showToast(editId ? 'Usuario actualizado' : 'Usuario creado', 'ok');
+    cerrarModal();
+    cargar();
+  } else {
+    errEl.textContent = data?.error || 'Error al guardar';
+    errEl.style.display = 'block';
+  }
+}
+
+async function eliminar(id, nombre) {
+  if (!confirm(`¿Eliminar al usuario ${nombre}? Esta acción no se puede deshacer.`)) return;
+  const res = await apiFetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+  if (res?.ok) { showToast('Usuario eliminado', 'ok'); cargar(); }
+  else { const d = await res?.json(); showToast(d?.error || 'Error al eliminar', 'error'); }
+}
+
+init();
+</script>
+</body>
+</html>

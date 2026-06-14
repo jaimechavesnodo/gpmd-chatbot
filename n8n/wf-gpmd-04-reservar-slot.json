@@ -1,0 +1,86 @@
+{
+  "name": "wf-gpmd-04-reservar-slot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gpmd/reservar-slot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst headers = $input.first().json.headers || {};\n\nif (headers['x-gpmd-secret'] !== 'GPMD_WEBHOOK_SECRET') {\n  return [{ json: { ok: 'false', error: 'Unauthorized' } }];\n}\n\nconst phone = (body.phone || '').replace(/\\D/g, '');\nconst eleccion = (body.eleccion || '').toLowerCase();\n\n// Parsear elección: puede ser 'am 21', 'pm 22', 'martes am', '21 am', etc.\nlet fecha = null, franja = null;\nconst franjas = { am:'AM', pm:'PM', mañana:'AM', tarde:'PM' };\nconst dias = { '21':'2026-07-21','22':'2026-07-22','23':'2026-07-23','24':'2026-07-24',\n  martes:'2026-07-21', miercoles:'2026-07-22', miércoles:'2026-07-22',\n  jueves:'2026-07-23', viernes:'2026-07-24' };\n\nfor (const [k,v] of Object.entries(dias)) { if (eleccion.includes(k)) { fecha = v; break; } }\nfor (const [k,v] of Object.entries(franjas)) { if (eleccion.includes(k)) { franja = v; break; } }\n\n// También puede venir fecha/franja directamente\nif (!fecha && body.fecha) fecha = body.fecha;\nif (!franja && body.franja) franja = (body.franja || '').toUpperCase();\n\nif (!phone || !fecha || !franja) {\n  return [{ json: { ok: 'false', error: 'No pude entender la fecha y franja. Por favor indica el día (21, 22, 23 o 24) y la franja (AM o PM).' } }];\n}\n\nreturn [{ json: { phone, fecha, franja } }];"
+      },
+      "id": "parse-input",
+      "name": "Parsear Elección",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE gpmd_slots SET participant_id = (SELECT id FROM gpmd_participants WHERE phone=$1 LIMIT 1), reservado_at=NOW() WHERE id = (SELECT id FROM gpmd_slots WHERE fecha=$2 AND franja=$3 AND participant_id IS NULL ORDER BY numero_slot LIMIT 1) RETURNING id, fecha, franja, hora_inicio, hora_fin",
+        "additionalFields": {
+          "queryParams": "={{ JSON.stringify([$json.phone, $json.fecha, $json.franja]) }}"
+        },
+        "options": { "alwaysOutputData": true }
+      },
+      "id": "reservar",
+      "name": "Reservar Slot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE gpmd_participants SET estado='factura_pendiente', updated_at=NOW() WHERE phone=$1",
+        "additionalFields": { "queryParams": "={{ JSON.stringify([$('Parsear Elección').first().json.phone]) }}" },
+        "options": {}
+      },
+      "id": "update-estado",
+      "name": "Actualizar Estado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [900, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const slot = $('Reservar Slot').first().json;\nconst parsed = $('Parsear Elección').first().json;\n\nif (!slot || !slot.id) {\n  return [{ json: { ok: 'false', error: 'No hay slots disponibles en esa franja. Por favor elige otro horario.' } }];\n}\n\nconst labels = {\n  '2026-07-21':'martes 21','2026-07-22':'miércoles 22',\n  '2026-07-23':'jueves 23','2026-07-24':'viernes 24',\n};\nconst fechaStr = typeof slot.fecha === 'string' ? slot.fecha.slice(0,10) : new Date(slot.fecha).toISOString().slice(0,10);\n\nreturn [{ json: {\n  ok: 'true',\n  fecha: fechaStr,\n  franja: slot.franja,\n  hora_inicio: slot.hora_inicio,\n  hora_fin: slot.hora_fin,\n  resumen: `Tu turno quedó confirmado para el ${labels[fechaStr] || fechaStr} de julio, franja ${slot.franja} (${slot.hora_inicio} – ${slot.hora_fin}).`,\n} }];"
+      },
+      "id": "build-response",
+      "name": "Construir Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {} },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Parsear Elección", "type": "main", "index": 0 }]] },
+    "Parsear Elección": { "main": [[{ "node": "Reservar Slot", "type": "main", "index": 0 }]] },
+    "Reservar Slot": { "main": [[{ "node": "Actualizar Estado", "type": "main", "index": 0 }]] },
+    "Actualizar Estado": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
+    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gpmd" }]
+}

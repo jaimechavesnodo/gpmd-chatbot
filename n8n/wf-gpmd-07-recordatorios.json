@@ -1,0 +1,84 @@
+{
+  "name": "wf-gpmd-07-recordatorios",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }] }
+      },
+      "id": "cron",
+      "name": "Cron 8am diario",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.id, p.phone, p.nombre_piloto, p.codigo_preregistro,\n  s.fecha, s.franja, s.hora_inicio, s.hora_fin,\n  (s.fecha::date - CURRENT_DATE) AS dias_restantes\nFROM gpmd_participants p\nJOIN gpmd_slots s ON s.participant_id = p.id\nWHERE p.estado = 'aprobado'\n  AND s.fecha::date BETWEEN CURRENT_DATE + 1 AND CURRENT_DATE + 3\nORDER BY s.fecha",
+        "additionalFields": {},
+        "options": { "alwaysOutputData": true }
+      },
+      "id": "get-recordatorios",
+      "name": "Obtener Recordatorios",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [460, 300],
+      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('Obtener Recordatorios').all().map(i => i.json);\nconst results = [];\n\nconst labels = {\n  '2026-07-21':'martes 21','2026-07-22':'miércoles 22',\n  '2026-07-23':'jueves 23','2026-07-24':'viernes 24',\n};\n\nfor (const row of rows) {\n  const dias = parseInt(row.dias_restantes);\n  const fechaStr = typeof row.fecha === 'string' ? row.fecha.slice(0,10) : new Date(row.fecha).toISOString().slice(0,10);\n  const diaLabel = labels[fechaStr] || fechaStr;\n  \n  let emoji = dias <= 1 ? '🚨' : '⏰';\n  let plazo = dias === 1 ? 'mañana' : dias === 2 ? 'en 2 días' : `en ${dias} días`;\n  \n  const mensaje = `${emoji} *Recordatorio GPMD 2026*\\n\\nHola ${row.nombre_piloto || 'piloto'}, tu revisión tecno-mecánica es *${plazo}*, el *${diaLabel} de julio*, franja *${row.franja}* (${row.hora_inicio}–${row.hora_fin}).\\n\\n📋 Recuerda llevar:\\n• Cédula original\\n• Licencia de conducción\\n• Documentos del vehículo\\n• Código de preregistro: *${row.codigo_preregistro}*\\n\\n¡Te esperamos! 🏁🚛`;\n  \n  results.push({ json: { phone: row.phone, mensaje } });\n}\n\nreturn results.length ? results : [{ json: { sin_recordatorios: true } }];"
+      },
+      "id": "build-messages",
+      "name": "Construir Mensajes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "leftValue": "={{ $json.sin_recordatorios }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-hay",
+      "name": "¿Hay recordatorios?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WATI_API_URL }}/api/v1/sendSessionMessage/{{ $json.phone }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.WATI_API_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messageText: $json.mensaje }) }}",
+        "options": {}
+      },
+      "id": "send-wati",
+      "name": "Enviar Recordatorio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 160]
+    }
+  ],
+  "connections": {
+    "Cron 8am diario": { "main": [[{ "node": "Obtener Recordatorios", "type": "main", "index": 0 }]] },
+    "Obtener Recordatorios": { "main": [[{ "node": "Construir Mensajes", "type": "main", "index": 0 }]] },
+    "Construir Mensajes": { "main": [[{ "node": "¿Hay recordatorios?", "type": "main", "index": 0 }]] },
+    "¿Hay recordatorios?": { "main": [
+      [{ "node": "Enviar Recordatorio", "type": "main", "index": 0 }],
+      []
+    ]}
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gpmd" }]
+}
