@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 const BASE_URL = process.env.WATI_API_URL;
 const TOKEN = process.env.WATI_API_TOKEN;
 

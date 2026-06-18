@@ -3,8 +3,6 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { requireAuth } = require('../middleware/auth');
 const { logActivity } = require('../middleware/logger');
-const fetch = require('node-fetch');
-
 // GET /api/facturas/pendientes — cola de revisión manual
 router.get('/pendientes', requireAuth(['admin', 'agente']), async (req, res) => {
   const { data, error } = await supabase
