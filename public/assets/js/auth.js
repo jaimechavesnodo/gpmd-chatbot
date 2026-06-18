@@ -5,21 +5,21 @@ function getUser() { return JSON.parse(localStorage.getItem('gpmd_user') || 'nul
 function requireLogin() {
   const t = getToken();
   const u = getUser();
-  if (!t || !u) { window.location.href = '/'; return null; }
+  if (!t || !u) { window.location.href = './'; return null; }
   return u;
 }
 
 function requireRole(roles) {
   const u = requireLogin();
   if (!u) return null;
-  if (!roles.includes(u.rol)) { window.location.href = '/'; return null; }
+  if (!roles.includes(u.rol)) { window.location.href = './'; return null; }
   return u;
 }
 
 function logout() {
   localStorage.removeItem('gpmd_token');
   localStorage.removeItem('gpmd_user');
-  window.location.href = '/';
+  window.location.href = './';
 }
 
 async function apiFetch(url, options = {}) {
@@ -41,11 +41,11 @@ function renderSidebar(activeKey) {
   if (!user) return;
 
   const nav = [
-    { key: 'agenda',    href: '/agenda.html',    icon: '📅', label: 'Agenda', roles: ['admin','cliente'] },
-    { key: 'aprobador', href: '/aprobador.html',  icon: '✅', label: 'Aprobador', roles: ['admin','agente'] },
-    { key: 'dashboard', href: '/dashboard.html',  icon: '📊', label: 'Dashboard', roles: ['admin','cliente'] },
-    { key: 'log',       href: '/log.html',        icon: '📋', label: 'Log', roles: ['admin'] },
-    { key: 'usuarios',  href: '/usuarios.html',   icon: '👥', label: 'Usuarios', roles: ['admin'] },
+    { key: 'agenda',    href: 'agenda.html',    icon: '📅', label: 'Agenda', roles: ['admin','cliente'] },
+    { key: 'aprobador', href: 'aprobador.html',  icon: '✅', label: 'Aprobador', roles: ['admin','agente'] },
+    { key: 'dashboard', href: 'dashboard.html',  icon: '📊', label: 'Dashboard', roles: ['admin','cliente'] },
+    { key: 'log',       href: 'log.html',        icon: '📋', label: 'Log', roles: ['admin'] },
+    { key: 'usuarios',  href: 'usuarios.html',   icon: '👥', label: 'Usuarios', roles: ['admin'] },
   ].filter(n => n.roles.includes(user.rol));
 
   const links = nav.map(n =>
@@ -56,8 +56,8 @@ function renderSidebar(activeKey) {
 
   document.getElementById('sidebar').innerHTML = `
     <div class="sidebar-logo">
-      <img src="/assets/img/Logo_MobilDelvac_v2.png" alt="Mobil Delvac" class="logo-mobil"/>
-      <img src="/assets/img/logo-nodo-white.png" alt="NODO" class="logo-nodo"/>
+      <img src="assets/img/Logo_MobilDelvac_v2.png" alt="Mobil Delvac" class="logo-mobil"/>
+      <img src="assets/img/logo-nodo-white.png" alt="NODO" class="logo-nodo"/>
     </div>
     <nav class="sidebar-nav">${links}</nav>
     <div class="sidebar-footer">

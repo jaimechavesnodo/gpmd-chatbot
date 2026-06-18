@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <base href="/gpmd-chatbot/"/>
   <title>Aprobador — GPMD 2026</title>
-  <link rel="icon" href="/assets/img/favicon.png"/>
-  <link rel="stylesheet" href="/assets/css/main.css"/>
+  <link rel="icon" href="assets/img/favicon.png"/>
+  <link rel="stylesheet" href="assets/css/main.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     .queue-item {
@@ -147,7 +148,7 @@
   </main>
 </div>
 
-<script src="/assets/js/auth.js"></script>
+<script src="assets/js/auth.js"></script>
 <script>
 let cola = [], facturaActual = null, decision = null, zoomLevel = 1;
 
@@ -158,7 +159,7 @@ async function init() {
 }
 
 async function cargarCola() {
-  const res = await apiFetch('/api/facturas/pendientes');
+  const res = await apiFetch('api/facturas/pendientes');
   if (!res) return;
   cola = await res.json();
   renderCola();
@@ -190,7 +191,7 @@ function confianzaLabel(c) {
 }
 
 async function cargarFactura(id) {
-  const res = await apiFetch(`/api/facturas/${id}`);
+  const res = await apiFetch(`api/facturas/${id}`);
   if (!res) return;
   facturaActual = await res.json();
   decision = null;
@@ -271,11 +272,11 @@ async function guardarRevision() {
       presentacion: v('f_presentacion'), cantidad: parseFloat(v('f_cantidad')),
       valor_total: parseFloat(v('f_valor_total')),
     };
-    res = await apiFetch(`/api/facturas/${facturaActual.id}/aprobar`, { method: 'PATCH', body: JSON.stringify(body) });
+    res = await apiFetch(`api/facturas/${facturaActual.id}/aprobar`, { method: 'PATCH', body: JSON.stringify(body) });
   } else {
     const razon = v('f_razon_rechazo');
     if (!razon) { showToast('Selecciona razón de rechazo', 'error'); btn.disabled = false; btn.textContent = 'Guardar Revisión'; return; }
-    res = await apiFetch(`/api/facturas/${facturaActual.id}/rechazar`, {
+    res = await apiFetch(`api/facturas/${facturaActual.id}/rechazar`, {
       method: 'PATCH',
       body: JSON.stringify({ razon_rechazo: razon, razon_rechazo_detalle: v('f_razon_detalle') }),
     });

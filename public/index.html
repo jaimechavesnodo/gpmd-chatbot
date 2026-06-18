@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <base href="/gpmd-chatbot/"/>
   <title>GPMD 2026 — Iniciar Sesión</title>
-  <link rel="icon" href="/assets/img/favicon.png"/>
-  <link rel="stylesheet" href="/assets/css/main.css"/>
+  <link rel="icon" href="assets/img/favicon.png"/>
+  <link rel="stylesheet" href="assets/css/main.css"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 </head>
 <body class="login-page">
   <div class="login-card">
-    <img src="/assets/img/Logo_MobilDelvac_v2.png" alt="Mobil Delvac" class="logo-mobil"/>
+    <img src="assets/img/Logo_MobilDelvac_v2.png" alt="Mobil Delvac" class="logo-mobil"/>
     <h1>Gran Premio Mobil Delvac 2026<br/>Panel Administrativo</h1>
 
     <form id="loginForm">
@@ -30,7 +31,7 @@
     </form>
 
     <div style="margin-top:1.5rem;text-align:center;">
-      <img src="/assets/img/logo-nodo.png" alt="NODO" style="height:24px;opacity:.5;"/>
+      <img src="assets/img/logo-nodo.png" alt="NODO" style="height:24px;opacity:.5;"/>
     </div>
   </div>
 
@@ -39,7 +40,7 @@
     const token = localStorage.getItem('gpmd_token');
     const user  = JSON.parse(localStorage.getItem('gpmd_user') || 'null');
     if (token && user) {
-      const dest = user.rol === 'agente' ? '/aprobador.html' : '/agenda.html';
+      const dest = user.rol === 'agente' ? 'aprobador.html' : 'agenda.html';
       window.location.href = dest;
     }
 
@@ -52,7 +53,7 @@
       errEl.style.display = 'none';
 
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch('api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -66,7 +67,7 @@
         localStorage.setItem('gpmd_token', data.token);
         localStorage.setItem('gpmd_user', JSON.stringify(data.user));
 
-        const dest = data.user.rol === 'agente' ? '/aprobador.html' : '/agenda.html';
+        const dest = data.user.rol === 'agente' ? 'aprobador.html' : 'agenda.html';
         window.location.href = dest;
       } catch (err) {
         errEl.textContent = err.message;

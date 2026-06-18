@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <base href="/gpmd-chatbot/"/>
   <title>Usuarios — GPMD 2026</title>
-  <link rel="icon" href="/assets/img/favicon.png"/>
-  <link rel="stylesheet" href="/assets/css/main.css"/>
+  <link rel="icon" href="assets/img/favicon.png"/>
+  <link rel="stylesheet" href="assets/css/main.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 </head>
 <body>
@@ -81,7 +82,7 @@
   </div>
 </div>
 
-<script src="/assets/js/auth.js"></script>
+<script src="assets/js/auth.js"></script>
 <script>
 let editId = null, myId = null;
 
@@ -94,7 +95,7 @@ async function init() {
 }
 
 async function cargar() {
-  const res = await apiFetch('/api/usuarios');
+  const res = await apiFetch('api/usuarios');
   if (!res) return;
   const users = await res.json();
   renderTabla(users);
@@ -153,7 +154,7 @@ async function guardar() {
   if (password) body.password = password;
   if (editId) body.activo = activo;
 
-  const res = await apiFetch(editId ? `/api/usuarios/${editId}` : '/api/usuarios', {
+  const res = await apiFetch(editId ? `api/usuarios/${editId}` : 'api/usuarios', {
     method: editId ? 'PATCH' : 'POST',
     body: JSON.stringify(body),
   });
@@ -171,7 +172,7 @@ async function guardar() {
 
 async function eliminar(id, nombre) {
   if (!confirm(`¿Eliminar al usuario ${nombre}? Esta acción no se puede deshacer.`)) return;
-  const res = await apiFetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+  const res = await apiFetch(`api/usuarios/${id}`, { method: 'DELETE' });
   if (res?.ok) { showToast('Usuario eliminado', 'ok'); cargar(); }
   else { const d = await res?.json(); showToast(d?.error || 'Error al eliminar', 'error'); }
 }
