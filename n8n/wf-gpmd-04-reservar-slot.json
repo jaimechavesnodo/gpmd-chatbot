@@ -27,7 +27,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE gpmd_slots SET participant_id = (SELECT id FROM gpmd_participants WHERE phone=$1 LIMIT 1), reservado_at=NOW() WHERE id = (SELECT id FROM gpmd_slots WHERE fecha=$2 AND franja=$3 AND participant_id IS NULL ORDER BY numero_slot LIMIT 1) RETURNING id, fecha, franja, hora_inicio, hora_fin",
+        "query": "UPDATE gpmd_slots SET participant_id = (SELECT id FROM gpmd_participants WHERE phone=$1 LIMIT 1), reservado_at=NOW() WHERE id = (SELECT id FROM gpmd_slots WHERE fecha=$2 AND franja=$3 AND participant_id IS NULL ORDER BY numero_slot LIMIT 1) RETURNING id, to_char(fecha,'YYYY-MM-DD') AS fecha, franja, hora_inicio, hora_fin",
         "additionalFields": {
           "queryParams": "={{ JSON.stringify([$json.phone, $json.fecha, $json.franja]) }}"
         },

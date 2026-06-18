@@ -17,7 +17,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT fecha, franja, hora_inicio, hora_fin, COUNT(*) AS disponibles FROM gpmd_slots WHERE participant_id IS NULL GROUP BY fecha, franja, hora_inicio, hora_fin ORDER BY fecha, franja",
+        "query": "SELECT to_char(fecha,'YYYY-MM-DD') AS fecha, franja, hora_inicio, hora_fin, COUNT(*) AS disponibles FROM gpmd_slots WHERE participant_id IS NULL GROUP BY fecha, franja, hora_inicio, hora_fin ORDER BY fecha, franja",
         "additionalFields": {},
         "options": { "alwaysOutputData": true }
       },

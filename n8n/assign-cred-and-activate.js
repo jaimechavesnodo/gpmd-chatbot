@@ -33,10 +33,11 @@ async function api(method, path, body) {
 }
 
 async function main() {
-  // 1. Listar workflows y filtrar los GPMD
+  // 1. Listar workflows y filtrar los GPMD (no archivados)
   const list = await api('GET', '/workflows?limit=250');
-  const wfs = (list.data || list).filter(w => /^wf-gpmd-/.test(w.name));
-  console.log(`Encontrados ${wfs.length} workflows GPMD`);
+  const all = (list.data || list).filter(w => /^wf-gpmd-/.test(w.name));
+  const wfs = all.filter(w => !w.isArchived);
+  console.log(`Encontrados ${all.length} workflows GPMD (${all.length - wfs.length} archivados se omiten)`);
 
   for (const wfMeta of wfs) {
     const wf = await api('GET', `/workflows/${wfMeta.id}`);
@@ -49,22 +50,21 @@ async function main() {
       }
     }
 
-    // PUT requiere solo name, nodes, connections, settings
-    const payload = {
-      name: wf.name,
-      nodes: wf.nodes,
-      connections: wf.connections,
-      settings: wf.settings || { executionOrder: 'v1' },
-    };
-    await api('PUT', `/workflows/${wf.id}`, payload);
-    console.log(`  ✓ ${wf.name}: ${touched} nodo(s) Postgres asignados`);
-
-    // Activar
     try {
+      // PUT requiere solo name, nodes, connections, settings
+      const payload = {
+        name: wf.name,
+        nodes: wf.nodes,
+        connections: wf.connections,
+        settings: wf.settings || { executionOrder: 'v1' },
+      };
+      await api('PUT', `/workflows/${wf.id}`, payload);
+      console.log(`  ✓ ${wf.name}: ${touched} nodo(s) Postgres asignados`);
+
       await api('POST', `/workflows/${wf.id}/activate`);
       console.log(`    → activado`);
     } catch (e) {
-      console.log(`    ⚠ no se pudo activar: ${e.message}`);
+      console.log(`  ⚠ ${wf.name}: ${e.message}`);
     }
   }
 

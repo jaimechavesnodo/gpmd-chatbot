@@ -14,7 +14,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT p.id, p.phone, p.nombre_piloto, p.codigo_preregistro,\n  s.fecha, s.franja, s.hora_inicio, s.hora_fin,\n  (s.fecha::date - CURRENT_DATE) AS dias_restantes\nFROM gpmd_participants p\nJOIN gpmd_slots s ON s.participant_id = p.id\nWHERE p.estado = 'aprobado'\n  AND s.fecha::date BETWEEN CURRENT_DATE + 1 AND CURRENT_DATE + 3\nORDER BY s.fecha",
+        "query": "SELECT p.id, p.phone, p.nombre_piloto, p.codigo_preregistro,\n  to_char(s.fecha,'YYYY-MM-DD') AS fecha, s.franja, s.hora_inicio, s.hora_fin,\n  (s.fecha::date - CURRENT_DATE) AS dias_restantes\nFROM gpmd_participants p\nJOIN gpmd_slots s ON s.participant_id = p.id\nWHERE p.estado = 'aprobado'\n  AND s.fecha::date BETWEEN CURRENT_DATE + 1 AND CURRENT_DATE + 3\nORDER BY s.fecha",
         "additionalFields": {},
         "options": { "alwaysOutputData": true }
       },
