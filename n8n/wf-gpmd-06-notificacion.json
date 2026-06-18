@@ -43,10 +43,17 @@
             }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messageText: $json.mensaje }) }}",
-        "options": {}
+        "sendBody": false,
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "messageText",
+              "value": "={{ $json.mensaje }}"
+            }
+          ]
+        }
       },
       "id": "send-wati",
       "name": "Enviar WhatsApp",
