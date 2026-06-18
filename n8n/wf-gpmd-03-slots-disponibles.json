@@ -12,21 +12,33 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT to_char(fecha,'YYYY-MM-DD') AS fecha, franja, hora_inicio, hora_fin, COUNT(*) AS disponibles FROM gpmd_slots WHERE participant_id IS NULL GROUP BY fecha, franja, hora_inicio, hora_fin ORDER BY fecha, franja",
         "additionalFields": {},
-        "options": { "alwaysOutputData": true }
+        "options": {}
       },
       "id": "query-slots",
       "name": "Query Slots",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [460, 300],
-      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+      "typeVersion": 2.5,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase GPMD"
+        }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -36,23 +48,69 @@
       "name": "Construir Respuesta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {} },
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
       "id": "respond",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Query Slots", "type": "main", "index": 0 }]] },
-    "Query Slots": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
-    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Query Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Slots": {
+      "main": [
+        [
+          {
+            "node": "Construir Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir Respuesta": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "tags": [{ "name": "gpmd" }]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "gpmd"
+    }
+  ]
 }

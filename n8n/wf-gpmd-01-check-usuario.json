@@ -12,7 +12,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -22,23 +25,34 @@
       "name": "Validar Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT id, phone, cedula, nombre_piloto, estado, codigo_preregistro FROM gpmd_participants WHERE phone = $1 LIMIT 1",
-        "additionalFields": {
-          "queryParams": "={{ JSON.stringify([$('Validar Input').first().json.phone]) }}"
-        },
-        "options": { "alwaysOutputData": true }
+        "options": {
+          "queryReplacement": "={{ [$('Validar Input').first().json.phone] }}"
+        }
       },
       "id": "buscar-participante",
       "name": "Buscar Participante",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [680, 300],
-      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+      "typeVersion": 2.5,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase GPMD"
+        }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -48,7 +62,10 @@
       "name": "Construir Respuesta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -60,16 +77,65 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Validar Input", "type": "main", "index": 0 }]] },
-    "Validar Input": { "main": [[{ "node": "Buscar Participante", "type": "main", "index": 0 }]] },
-    "Buscar Participante": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
-    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Input": {
+      "main": [
+        [
+          {
+            "node": "Buscar Participante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Participante": {
+      "main": [
+        [
+          {
+            "node": "Construir Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir Respuesta": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "tags": [{ "name": "gpmd" }]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "gpmd"
+    }
+  ]
 }

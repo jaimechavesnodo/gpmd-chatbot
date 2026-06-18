@@ -12,7 +12,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -22,21 +25,34 @@
       "name": "Validar Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT id, nombre_piloto FROM gpmd_participants WHERE phone=$1 LIMIT 1",
-        "additionalFields": { "queryParams": "={{ JSON.stringify([$json.phone]) }}" },
-        "options": { "alwaysOutputData": true }
+        "options": {
+          "queryReplacement": "={{ [$json.phone] }}"
+        }
       },
       "id": "get-participant",
       "name": "Obtener Participante",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [680, 300],
-      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+      "typeVersion": 2.5,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase GPMD"
+        }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -45,9 +61,18 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
-            { "name": "content-type", "value": "application/json" }
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -59,7 +84,10 @@
       "name": "Claude Vision OCR",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -69,37 +97,58 @@
       "name": "Evaluar OCR",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO gpmd_facturas (participant_id, imagen_url, ocr_raw, ocr_establecimiento, ocr_ciudad, ocr_fecha_compra, ocr_referencia_producto, ocr_presentacion, ocr_cantidad, ocr_valor_total, ocr_confianza, ocr_motivo_revision, establecimiento, ciudad, fecha_compra, referencia_producto, presentacion, cantidad, valor_total, estado)\nVALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::date,$17,$18,$19,$20)\nRETURNING id",
-        "additionalFields": {
-          "queryParams": "={{ JSON.stringify([\n  $json.participant_id,\n  $json.media_url,\n  JSON.stringify($json.ocr),\n  $json.ocr.establecimiento || null,\n  $json.ocr.ciudad || null,\n  $json.ocr.fecha_compra || null,\n  $json.ocr.referencia_producto || null,\n  $json.ocr.presentacion || null,\n  $json.ocr.cantidad || null,\n  $json.ocr.valor_total || null,\n  $json.confianza,\n  $json.motivo,\n  $json.pasaAuto === 'true' ? $json.ocr.establecimiento || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.ciudad || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.fecha_compra || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.referencia_producto || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.presentacion || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.cantidad || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.valor_total || null : null,\n  $json.estado\n]) }}"
+        "options": {
+          "queryReplacement": "={{ [\n  $json.participant_id,\n  $json.media_url,\n  JSON.stringify($json.ocr),\n  $json.ocr.establecimiento || null,\n  $json.ocr.ciudad || null,\n  $json.ocr.fecha_compra || null,\n  $json.ocr.referencia_producto || null,\n  $json.ocr.presentacion || null,\n  $json.ocr.cantidad || null,\n  $json.ocr.valor_total || null,\n  $json.confianza,\n  $json.motivo,\n  $json.pasaAuto === 'true' ? $json.ocr.establecimiento || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.ciudad || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.fecha_compra || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.referencia_producto || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.presentacion || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.cantidad || null : null,\n  $json.pasaAuto === 'true' ? $json.ocr.valor_total || null : null,\n  $json.estado\n] }}"
         }
       },
       "id": "insert-factura",
       "name": "Guardar Factura",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [1340, 300],
-      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+      "typeVersion": 2.5,
+      "position": [
+        1340,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase GPMD"
+        }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE gpmd_participants SET estado=$1, updated_at=NOW() WHERE id=$2",
-        "additionalFields": {
-          "queryParams": "={{ JSON.stringify([\n  $('Evaluar OCR').first().json.pasaAuto === 'true' ? 'aprobado' : 'factura_en_revision',\n  $('Evaluar OCR').first().json.participant_id\n]) }}"
+        "options": {
+          "queryReplacement": "={{ [\n  $('Evaluar OCR').first().json.pasaAuto === 'true' ? 'aprobado' : 'factura_en_revision',\n  $('Evaluar OCR').first().json.participant_id\n] }}"
         }
       },
       "id": "update-participant",
       "name": "Actualizar Participante",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [1560, 300],
-      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+      "typeVersion": 2.5,
+      "position": [
+        1560,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase GPMD"
+        }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -109,28 +158,124 @@
       "name": "Construir Respuesta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 300]
+      "position": [
+        1780,
+        300
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {} },
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
       "id": "respond",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [2000, 300]
+      "position": [
+        2000,
+        300
+      ]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Validar Input", "type": "main", "index": 0 }]] },
-    "Validar Input": { "main": [[{ "node": "Obtener Participante", "type": "main", "index": 0 }]] },
-    "Obtener Participante": { "main": [[{ "node": "Claude Vision OCR", "type": "main", "index": 0 }]] },
-    "Claude Vision OCR": { "main": [[{ "node": "Evaluar OCR", "type": "main", "index": 0 }]] },
-    "Evaluar OCR": { "main": [[{ "node": "Guardar Factura", "type": "main", "index": 0 }]] },
-    "Guardar Factura": { "main": [[{ "node": "Actualizar Participante", "type": "main", "index": 0 }]] },
-    "Actualizar Participante": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
-    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Input": {
+      "main": [
+        [
+          {
+            "node": "Obtener Participante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Participante": {
+      "main": [
+        [
+          {
+            "node": "Claude Vision OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Vision OCR": {
+      "main": [
+        [
+          {
+            "node": "Evaluar OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar OCR": {
+      "main": [
+        [
+          {
+            "node": "Guardar Factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Factura": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Participante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Participante": {
+      "main": [
+        [
+          {
+            "node": "Construir Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir Respuesta": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "tags": [{ "name": "gpmd" }]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "gpmd"
+    }
+  ]
 }

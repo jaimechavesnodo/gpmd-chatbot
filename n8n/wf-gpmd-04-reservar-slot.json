@@ -12,7 +12,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -22,37 +25,58 @@
       "name": "Parsear Elección",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE gpmd_slots SET participant_id = (SELECT id FROM gpmd_participants WHERE phone=$1 LIMIT 1), reservado_at=NOW() WHERE id = (SELECT id FROM gpmd_slots WHERE fecha=$2 AND franja=$3 AND participant_id IS NULL ORDER BY numero_slot LIMIT 1) RETURNING id, to_char(fecha,'YYYY-MM-DD') AS fecha, franja, hora_inicio, hora_fin",
-        "additionalFields": {
-          "queryParams": "={{ JSON.stringify([$json.phone, $json.fecha, $json.franja]) }}"
-        },
-        "options": { "alwaysOutputData": true }
+        "options": {
+          "queryReplacement": "={{ [$json.phone, $json.fecha, $json.franja] }}"
+        }
       },
       "id": "reservar",
       "name": "Reservar Slot",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [680, 300],
-      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+      "typeVersion": 2.5,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase GPMD"
+        }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE gpmd_participants SET estado='factura_pendiente', updated_at=NOW() WHERE phone=$1",
-        "additionalFields": { "queryParams": "={{ JSON.stringify([$('Parsear Elección').first().json.phone]) }}" },
-        "options": {}
+        "options": {
+          "queryReplacement": "={{ [$('Parsear Elección').first().json.phone] }}"
+        }
       },
       "id": "update-estado",
       "name": "Actualizar Estado",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [900, 300],
-      "credentials": { "postgres": { "id": "SUPABASE_CRED_ID", "name": "Supabase GPMD" } }
+      "typeVersion": 2.5,
+      "position": [
+        900,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase GPMD"
+        }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -62,25 +86,91 @@
       "name": "Construir Respuesta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {} },
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
       "id": "respond",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Parsear Elección", "type": "main", "index": 0 }]] },
-    "Parsear Elección": { "main": [[{ "node": "Reservar Slot", "type": "main", "index": 0 }]] },
-    "Reservar Slot": { "main": [[{ "node": "Actualizar Estado", "type": "main", "index": 0 }]] },
-    "Actualizar Estado": { "main": [[{ "node": "Construir Respuesta", "type": "main", "index": 0 }]] },
-    "Construir Respuesta": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parsear Elección",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Elección": {
+      "main": [
+        [
+          {
+            "node": "Reservar Slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reservar Slot": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Estado": {
+      "main": [
+        [
+          {
+            "node": "Construir Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir Respuesta": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "tags": [{ "name": "gpmd" }]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "gpmd"
+    }
+  ]
 }
