@@ -16,7 +16,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || {};\nconst headers = $input.first().json.headers || {};\n\nconst token = headers['x-gpmd-secret'];\nif (token !== '$env.GPMD_WEBHOOK_SECRET') {\n  return [{ json: { ok: 'false', error: 'Unauthorized' } }];\n}\n\nconst phone = (body.phone || '').replace(/\\D/g, '');\nconst cedula = (body.cedula || '').trim();\n\nif (!phone) {\n  return [{ json: { ok: 'false', error: 'phone requerido' } }];\n}\n\nreturn [{ json: { phone, cedula } }];"
+        "jsCode": "const body = $input.first().json.body || {};\nconst headers = $input.first().json.headers || {};\n\nconst token = headers['x-gpmd-secret'];\nif (token !== $env.GPMD_WEBHOOK_SECRET) {\n  return [{ json: { ok: 'false', error: 'Unauthorized' } }];\n}\n\nconst phone = (body.phone || '').replace(/\\D/g, '');\nconst cedula = (body.cedula || '').trim();\n\nif (!phone) {\n  return [{ json: { ok: 'false', error: 'phone requerido' } }];\n}\n\nreturn [{ json: { phone, cedula } }];"
       },
       "id": "validate-input",
       "name": "Validar Input",
