@@ -46,11 +46,21 @@ async function updateContactAttributes(phone, params) {
   return data;
 }
 
-// Descargar media de WATI (requiere auth). Devuelve { buffer, contentType }.
+// Descargar media de WATI (requiere auth). Acepta tanto una ruta
+// (data/images/xxx.jpg) como una URL completa. Devuelve { buffer, contentType }.
 async function downloadMedia(fileName) {
-  const url = `${BASE_URL}/api/v1/getMedia?fileName=${encodeURIComponent(fileName)}`;
+  const fn = String(fileName || '').trim();
+  let url;
+  if (/^https?:\/\//i.test(fn)) {
+    url = fn; // el webhook ya entregó una URL descargable
+  } else {
+    url = `${BASE_URL}/api/v1/getMedia?fileName=${encodeURIComponent(fn.replace(/^\/+/, ''))}`;
+  }
   const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`getMedia ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`getMedia ${res.status} url=${url.slice(0, 120)} body=${body.slice(0, 120)}`);
+  }
   const contentType = res.headers.get('content-type') || 'image/jpeg';
   const buffer = Buffer.from(await res.arrayBuffer());
   return { buffer, contentType };
