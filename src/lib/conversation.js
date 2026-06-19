@@ -206,7 +206,16 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
 
   // --- COMPLETO ---
   if (conv.step === 'completo') {
-    await send(phone, 'Tu registro ya está completo y en proceso. Te notificaremos por aquí cualquier novedad. 🏁\n\nSi necesitas ayuda, escribe a un asesor.');
+    // Permitir reenviar una nueva factura si aún no está aprobado
+    if (msg.type === 'image' && msg.mediaFileName) {
+      const { data: part } = await supabase.from('gpmd_participants').select('estado').eq('phone', phone).maybeSingle();
+      if (part && part.estado === 'aprobado') {
+        await send(phone, '✅ Tu registro ya está *aprobado*, no necesitas enviar más facturas. 🏁');
+        return conv;
+      }
+      return procesarFactura(phone, conv, msg.mediaFileName, send);
+    }
+    await send(phone, 'Tu registro ya está en proceso. Te notificaremos por aquí para confirmar tu cita. 🏁\n\nSi necesitas ayuda, escribe a un asesor.');
     return conv;
   }
 
