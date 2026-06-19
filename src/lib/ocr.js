@@ -1,7 +1,25 @@
 // OCR de facturas con Claude Vision. Reusa el prompt validado en n8n.
 const Anthropic = require('@anthropic-ai/sdk');
+const { Agent, fetch: undiciFetch } = require('undici');
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Dispatcher dedicado: evita reusar conexiones keep-alive muertas hacia
+// api.anthropic.com (causa del error "Premature close" en el contenedor).
+const dispatcher = new Agent({
+  connectTimeout: 30000,
+  headersTimeout: 120000,
+  bodyTimeout: 120000,
+  keepAliveTimeout: 1000,
+  keepAliveMaxTimeout: 1000,
+  pipelining: 0,
+});
+const robustFetch = (url, opts = {}) => undiciFetch(url, { ...opts, dispatcher });
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  fetch: robustFetch,
+  maxRetries: 4,
+  timeout: 120000,
+});
 
 const SYSTEM = 'Eres un experto en lectura de facturas electronicas de venta de lubricantes en Colombia. La factura suele contener VARIOS productos en distintas lineas; tu tarea es identificar UNICAMENTE el producto Mobil Delvac participante e ignorar el resto (filtros, refrigerantes, limpiadores, aceites de otras marcas, aditivos, etc.). El nombre Mobil Delvac puede venir abreviado o con variaciones (ej: M.DELVAC, DELVAC MX, MOBIL DELVAC MODERN 15W40 CK4, MD 1300). Extrae los datos en JSON. Si no puedes leer un campo con certeza usa null. Evalua la confianza (0.0 a 1.0) segun legibilidad y completitud. Responde SOLO con el JSON, sin texto adicional ni markdown.';
 

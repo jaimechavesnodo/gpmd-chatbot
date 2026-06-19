@@ -34,6 +34,22 @@
     .decision-opt.rechazado.selected { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
     .decision-opt:not(.selected):hover { background: #f9fafb; }
     .no-pending { text-align: center; padding: 3rem 1rem; color: #888; }
+
+    /* Split redimensionable: imagen | divisor | datos+formulario */
+    .split { display: flex; align-items: stretch; height: calc(100vh - 170px); min-height: 480px; }
+    .split-left { flex: 1 1 auto; min-width: 240px; display: flex; }
+    .split-left .factura-viewer { display: flex; flex-direction: column; flex: 1; margin: 0; min-height: 0; }
+    .split-left .factura-img-wrap { flex: 1; overflow: auto; min-height: 0; background: #f5f5f5; }
+    .split-left .factura-img-wrap img { display: block; max-width: 100%; }
+    .split-divider { flex: 0 0 8px; cursor: col-resize; background: #e5e5e5; border-radius: 4px; margin: 0 .6rem; transition: background .1s; }
+    .split-divider:hover, .split-divider.dragging { background: #E30613; }
+    .split-right { flex: 0 0 440px; min-width: 320px; overflow-y: auto; padding-right: .3rem; }
+    .split-right .factura-form-panel { margin: 0; }
+    @media (max-width: 900px) {
+      .split { flex-direction: column; height: auto; }
+      .split-divider { display: none; }
+      .split-right { flex: 1 1 auto; }
+    }
   </style>
 </head>
 <body>
@@ -67,8 +83,10 @@
         </div>
 
         <div id="aprobadorPanel" style="display:none;">
-          <!-- Imagen -->
-          <div class="factura-viewer" style="margin-bottom:1.25rem;">
+         <div class="split" id="split">
+          <!-- Imagen (izquierda, redimensionable) -->
+          <div class="split-left">
+           <div class="factura-viewer">
             <div class="factura-viewer-header">
               📷 Imagen de la Factura
               <span id="facturaId" style="font-size:.75rem;color:#888;float:right;"></span>
@@ -82,12 +100,18 @@
               <button onclick="zoom(0.25)">+</button>
               <a id="facturaLink" href="#" target="_blank" class="btn btn-secondary btn-sm" style="margin-left:auto;">Abrir original ↗</a>
             </div>
+           </div>
           </div>
 
+          <!-- Divisor arrastrable -->
+          <div class="split-divider" id="splitDivider" title="Arrastra para ajustar"></div>
+
+          <!-- Datos + formulario (derecha) -->
+          <div class="split-right">
           <!-- Datos del participante -->
-          <div style="background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:1rem 1.25rem;margin-bottom:1.25rem;">
+          <div style="background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:1rem 1.25rem;margin-bottom:1rem;">
             <div style="font-size:.8rem;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:.6rem;">Datos del Participante</div>
-            <div id="participanteResumen" style="display:grid;grid-template-columns:1fr 1fr;gap:.3rem .75rem;font-size:.84rem;"></div>
+            <div id="participanteResumen" style="display:grid;grid-template-columns:auto 1fr;gap:.3rem .75rem;font-size:.84rem;"></div>
           </div>
 
           <!-- Formulario de revisión -->
@@ -142,6 +166,8 @@
               <button class="btn btn-secondary" onclick="siguienteFact()">Siguiente →</button>
             </div>
           </div>
+          </div><!-- /split-right -->
+         </div><!-- /split -->
         </div>
       </div>
     </div>
@@ -316,6 +342,30 @@ function toggleZoom(img) {
   zoomLevel = zoomLevel > 1 ? 1 : 2;
   img.style.transform = zoomLevel > 1 ? `scale(${zoomLevel})` : '';
 }
+
+// Divisor arrastrable entre imagen y formulario
+(function initSplitter() {
+  const divider = document.getElementById('splitDivider');
+  if (!divider) return;
+  let dragging = false;
+  divider.addEventListener('mousedown', (e) => {
+    dragging = true; divider.classList.add('dragging');
+    document.body.style.userSelect = 'none'; e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const split = document.getElementById('split');
+    const rect = split.getBoundingClientRect();
+    let rightW = rect.right - e.clientX;
+    rightW = Math.max(320, Math.min(rect.width - 260, rightW));
+    const right = document.querySelector('.split-right');
+    if (right) right.style.flexBasis = rightW + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false; divider.classList.remove('dragging'); document.body.style.userSelect = '';
+  });
+})();
 
 init();
 </script>

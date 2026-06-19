@@ -342,7 +342,7 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     resultado = await ocr.analizarFactura(buffer, contentType);
   } catch (e) {
     console.error('[GPMD] OCR Claude falló:', e.message);
-    await send(phone, '⚠️ Tuvimos un problema verificando tu factura. Un asesor la revisará y te confirmaremos pronto. ⏳');
+    await send(phone, '📩 Recibí tu factura. Un asesor la revisará y te confirmaremos pronto para confirmar tu cita. ⏳');
     // Guardar como pendiente de revisión manual aunque el OCR haya fallado
     await supabase.from('gpmd_facturas').insert({
       participant_id: part.id, imagen_url: imagenUrl || mediaFileName,
