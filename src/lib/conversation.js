@@ -81,6 +81,12 @@ const DIA_LABEL = {
   '2026-07-23': 'jueves 23', '2026-07-24': 'viernes 24',
 };
 
+// Etiqueta legible de un turno, ej: "martes 21 de julio - PM"
+function etiquetaFecha(fecha, franja) {
+  const f = typeof fecha === 'string' ? fecha.slice(0, 10) : fecha;
+  return `${DIA_LABEL[f] || f} de julio - ${franja}`;
+}
+
 function genCodigo() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let c = 'GPMD-';
@@ -231,6 +237,9 @@ async function finalizarRegistro(phone, conv, send) {
     return conv;
   }
 
+  // Atributo WATI: registrado=true para todo el que completa las preguntas
+  wati.updateContactAttributes(phone, [{ name: 'registrado', value: 'true' }]).catch(() => {});
+
   await send(phone, `✅ ¡Datos guardados! Tu código de pre-registro es *${codigo}*.`);
   return mostrarSlots(phone, conv, send);
 }
@@ -314,14 +323,34 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     .select('id, nombre_piloto, codigo_preregistro').eq('phone', phone).maybeSingle();
   if (!part) { await send(phone, '⚠️ No encuentro tu registro. Escribe *reiniciar*.'); return conv; }
 
-  let resultado, imagenUrl = null;
+  // Etapa 1: descargar la media de WATI (requiere auth)
+  let buffer, contentType;
   try {
-    const { buffer, contentType } = await wati.downloadMedia(mediaFileName);
-    imagenUrl = await subirImagen(buffer, contentType, part.id);
+    ({ buffer, contentType } = await wati.downloadMedia(mediaFileName));
+  } catch (e) {
+    console.error('[GPMD] descarga media WATI falló:', e.message, '| file:', mediaFileName);
+    await send(phone, '⚠️ No pude descargar tu imagen. Por favor envíala de nuevo.');
+    return conv;
+  }
+
+  // Etapa 2: subir a Storage (no bloquea el flujo si falla)
+  const imagenUrl = await subirImagen(buffer, contentType, part.id);
+
+  // Etapa 3: OCR con Claude
+  let resultado;
+  try {
     resultado = await ocr.analizarFactura(buffer, contentType);
   } catch (e) {
-    console.error('[GPMD] OCR error:', e.message);
-    await send(phone, '⚠️ No pude procesar la imagen. Por favor envíala de nuevo, clara y completa.');
+    console.error('[GPMD] OCR Claude falló:', e.message);
+    await send(phone, '⚠️ Tuvimos un problema verificando tu factura. Un asesor la revisará y te confirmaremos pronto. ⏳');
+    // Guardar como pendiente de revisión manual aunque el OCR haya fallado
+    await supabase.from('gpmd_facturas').insert({
+      participant_id: part.id, imagen_url: imagenUrl || mediaFileName,
+      ocr_motivo_revision: 'Error técnico en OCR: ' + e.message, estado: 'en_revision',
+    });
+    await supabase.from('gpmd_participants').update({ estado: 'factura_en_revision' }).eq('id', part.id);
+    await saveConv(phone, { step: 'completo' });
+    conv.step = 'completo';
     return conv;
   }
 
@@ -349,9 +378,18 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
   conv.step = 'completo';
 
   if (resultado.pasaAuto) {
-    await send(phone, `✅ *¡Felicitaciones, ${(part.nombre_piloto || '').split(' ')[0] || 'piloto'}!*\n\nTu factura fue verificada y tu registro en el *Gran Premio Mobil Delvac 2026* está *COMPLETO*. 🏁\n\nTu código: *${part.codigo_preregistro}*\n\nRecuerda presentarte en tu horario con los documentos originales. ¡Mucha suerte! 🚛💨`);
+    // Atributos WATI: agendado=true + fecha_agenda (factura validada + slot reservado)
+    const { data: slot } = await supabase.from('gpmd_slots')
+      .select('fecha, franja').eq('participant_id', part.id).maybeSingle();
+    const fechaAgenda = slot ? etiquetaFecha(slot.fecha, slot.franja) : '';
+    wati.updateContactAttributes(phone, [
+      { name: 'agendado', value: 'true' },
+      { name: 'fecha_agenda', value: fechaAgenda },
+    ]).catch(() => {});
+
+    await send(phone, `✅ *¡Felicitaciones, ${(part.nombre_piloto || '').split(' ')[0] || 'piloto'}!*\n\nTu factura fue verificada y tu registro en el *Gran Premio Mobil Delvac 2026* está *COMPLETO*. 🏁\n\n🏁 Código: *${part.codigo_preregistro}*\n📅 Tu cita: *${fechaAgenda}*\n\nRecuerda presentarte en tu horario con los documentos originales. ¡Mucha suerte! 🚛💨`);
   } else {
-    await send(phone, '⏳ Recibimos tu factura y la estamos *revisando manualmente*. Te notificaremos por aquí en un máximo de 24 horas con el resultado. ¡Gracias por tu paciencia!');
+    await send(phone, '⏳ Recibimos tu factura y la estamos *revisando*. Te confirmaremos por este medio una vez sea verificada, para confirmar tu cita. Esto puede tomar hasta 24 horas. ¡Gracias por tu paciencia!');
   }
   return conv;
 }
@@ -365,4 +403,4 @@ async function subirImagen(buffer, contentType, participantId) {
   return data?.publicUrl || null;
 }
 
-module.exports = { processIncoming, STEPS };
+module.exports = { processIncoming, STEPS, etiquetaFecha };

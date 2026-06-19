@@ -3,6 +3,19 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { requireAuth } = require('../middleware/auth');
 const { logActivity } = require('../middleware/logger');
+const wati = require('../lib/wati');
+const { etiquetaFecha } = require('../lib/conversation');
+
+const RAZONES_LABEL = {
+  foto_ilegible: 'la foto o factura no es legible',
+  fuera_periodo: 'la factura está fuera de las fechas de participación',
+  producto_no_participante: 'el producto o la presentación no participan',
+  establecimiento_no_participante: 'el establecimiento no participa',
+  factura_duplicada: 'la factura ya fue registrada anteriormente',
+  valor_insuficiente: 'el valor no cumple el mínimo requerido',
+  otro: null,
+};
+
 // GET /api/facturas/pendientes — cola de revisión manual
 router.get('/pendientes', requireAuth(['admin', 'agente']), async (req, res) => {
   const { data, error } = await supabase
@@ -69,8 +82,8 @@ router.patch('/:id/aprobar', requireAuth(['admin', 'agente']), async (req, res) 
     usuarioId: req.user.id,
   });
 
-  // Disparar notificación WhatsApp vía n8n
-  await notificarParticipante(data.participant?.phone, 'aprobado', data.participant?.nombre_piloto, data.participant?.codigo_preregistro).catch(() => {});
+  // Notificar al participante por WhatsApp + atributos WATI
+  await notificarAprobado(data.participant_id, data.participant).catch((e) => console.error('[GPMD] notif aprobado:', e.message));
 
   res.json({ ok: true, data });
 });
@@ -112,21 +125,42 @@ router.patch('/:id/rechazar', requireAuth(['admin', 'agente']), async (req, res)
     usuarioId: req.user.id,
   });
 
-  await notificarParticipante(data.participant?.phone, 'rechazado', data.participant?.nombre_piloto, null, razon_rechazo).catch(() => {});
+  await notificarRechazado(data.participant, razon_rechazo, razon_rechazo_detalle).catch((e) => console.error('[GPMD] notif rechazo:', e.message));
 
   res.json({ ok: true, data });
 });
 
-async function notificarParticipante(phone, estado, nombre, codigo, razon) {
-  const url = `${process.env.N8N_WEBHOOK_BASE_URL}/notificacion`;
-  await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-gpmd-secret': process.env.N8N_WEBHOOK_SECRET,
-    },
-    body: JSON.stringify({ phone, estado, nombre, codigo, razon }),
-  });
+// Aprobación manual: confirma cita por WhatsApp + setea atributos agendado/fecha_agenda
+async function notificarAprobado(participantId, part) {
+  if (!part?.phone) return;
+  const { data: slot } = await supabase.from('gpmd_slots')
+    .select('fecha, franja').eq('participant_id', participantId).maybeSingle();
+  const fechaAgenda = slot ? etiquetaFecha(slot.fecha, slot.franja) : '';
+  const nombre = (part.nombre_piloto || '').split(' ')[0] || 'piloto';
+
+  await wati.updateContactAttributes(part.phone, [
+    { name: 'agendado', value: 'true' },
+    { name: 'fecha_agenda', value: fechaAgenda },
+  ]).catch(() => {});
+
+  await wati.sendSessionMessage(part.phone,
+    `✅ *¡Tu cita quedó confirmada, ${nombre}!*\n\n`
+    + `Tu factura fue verificada para el *Gran Premio Mobil Delvac 2026*.\n\n`
+    + `🏁 Código: *${part.codigo_preregistro}*\n`
+    + `📅 Cita: *${fechaAgenda}*\n\n`
+    + `Preséntate en tu horario con los documentos originales. ¡Mucha suerte! 🚛💨`);
+}
+
+// Rechazo manual: informa la razón al participante por WhatsApp
+async function notificarRechazado(part, razon, detalle) {
+  if (!part?.phone) return;
+  const nombre = (part.nombre_piloto || '').split(' ')[0] || 'piloto';
+  const label = RAZONES_LABEL[razon] || detalle || 'no cumple las condiciones de participación';
+
+  await wati.sendSessionMessage(part.phone,
+    `❌ *Hola ${nombre},*\n\n`
+    + `Tuvimos un problema con tu factura: *${label}*.\n\n`
+    + `Si tienes dudas o deseas intentar de nuevo, responde este mensaje y un asesor te ayudará.`);
 }
 
 module.exports = router;

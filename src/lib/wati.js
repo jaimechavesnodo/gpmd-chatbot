@@ -32,6 +32,20 @@ async function sendTemplateMessage(phone, templateName, params = []) {
   return res.json().catch(() => ({}));
 }
 
+// Actualizar atributos (custom fields) del contacto en WATI.
+// params: [{ name, value }]. Los atributos deben existir en WATI (Custom Fields).
+async function updateContactAttributes(phone, params) {
+  const url = `${BASE_URL}/api/v1/updateContactAttributes/${phone}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ customParams: params.map((p) => ({ name: p.name, value: String(p.value) })) }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (data.result === false) console.warn(`[WATI] atributos ${phone} →`, JSON.stringify(data).slice(0, 200));
+  return data;
+}
+
 // Descargar media de WATI (requiere auth). Devuelve { buffer, contentType }.
 async function downloadMedia(fileName) {
   const url = `${BASE_URL}/api/v1/getMedia?fileName=${encodeURIComponent(fileName)}`;
@@ -42,4 +56,4 @@ async function downloadMedia(fileName) {
   return { buffer, contentType };
 }
 
-module.exports = { sendSessionMessage, sendTemplateMessage, downloadMedia };
+module.exports = { sendSessionMessage, sendTemplateMessage, downloadMedia, updateContactAttributes };
