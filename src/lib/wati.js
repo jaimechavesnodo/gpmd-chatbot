@@ -1,43 +1,45 @@
-const BASE_URL = process.env.WATI_API_URL;
+// Helper de WATI (WhatsApp Business) — usa fetch nativo de Node 22+
+const BASE_URL = (process.env.WATI_API_URL || '').replace(/\/$/, '');
 const TOKEN = process.env.WATI_API_TOKEN;
 
-const headers = () => ({
-  'Authorization': `Bearer ${TOKEN}`,
-  'Content-Type': 'application/json',
-});
+function authHeaders(extra = {}) {
+  return { Authorization: `Bearer ${TOKEN}`, ...extra };
+}
 
+// Enviar mensaje de sesión (ventana de 24h). messageText va como QUERY PARAM.
+async function sendSessionMessage(phone, message) {
+  const url = `${BASE_URL}/api/v1/sendSessionMessage/${phone}?messageText=${encodeURIComponent(message)}`;
+  const res = await fetch(url, { method: 'POST', headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!data.result && data.result !== true && data.ok !== true) {
+    console.warn(`[WATI] envío a ${phone} →`, JSON.stringify(data).slice(0, 200));
+  }
+  return data;
+}
+
+// Enviar template (fuera de ventana de 24h)
 async function sendTemplateMessage(phone, templateName, params = []) {
-  const res = await fetch(`${BASE_URL}/api/v1/sendTemplateMessages`, {
+  const url = `${BASE_URL}/api/v1/sendTemplateMessage?whatsappNumber=${phone}`;
+  const res = await fetch(url, {
     method: 'POST',
-    headers: headers(),
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       template_name: templateName,
       broadcast_name: `gpmd_${Date.now()}`,
-      receivers: [{ whatsappNumber: phone, customParams: params }],
+      parameters: params.map((value, i) => ({ name: `${i + 1}`, value: String(value) })),
     }),
   });
-  return res.json();
+  return res.json().catch(() => ({}));
 }
 
-async function sendSessionMessage(phone, message) {
-  const res = await fetch(`${BASE_URL}/api/v1/sendSessionMessage/${phone}`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify({ messageText: message }),
-  });
-  return res.json();
+// Descargar media de WATI (requiere auth). Devuelve { buffer, contentType }.
+async function downloadMedia(fileName) {
+  const url = `${BASE_URL}/api/v1/getMedia?fileName=${encodeURIComponent(fileName)}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`getMedia ${res.status}`);
+  const contentType = res.headers.get('content-type') || 'image/jpeg';
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return { buffer, contentType };
 }
 
-async function updateContactAttribute(phone, name, value) {
-  const res = await fetch(`${BASE_URL}/api/v1/contacts/attributes`, {
-    method: 'PATCH',
-    headers: headers(),
-    body: JSON.stringify({
-      phone,
-      customParams: [{ name, value: String(value) }],
-    }),
-  });
-  return res.json();
-}
-
-module.exports = { sendTemplateMessage, sendSessionMessage, updateContactAttribute };
+module.exports = { sendSessionMessage, sendTemplateMessage, downloadMedia };

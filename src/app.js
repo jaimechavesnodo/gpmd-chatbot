@@ -24,6 +24,9 @@ function buildRouter() {
   r.use('/api/log',       require('./routes/log'));
   r.use('/api/usuarios',  require('./routes/usuarios'));
 
+  // Webhook entrante de WATI (chatbot WhatsApp)
+  r.use('/webhook/wati',  require('./routes/wati'));
+
   // Frontend estático
   r.use(express.static(publicDir));
 
