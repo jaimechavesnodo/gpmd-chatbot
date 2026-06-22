@@ -7,167 +7,104 @@
   <title>Aprobador — GPMD 2026</title>
   <link rel="icon" href="assets/img/favicon.png"/>
   <link rel="stylesheet" href="assets/css/main.css"/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
   <style>
-    .queue-item {
-      display: flex; align-items: center; gap: .75rem;
-      padding: .7rem 1rem; border-bottom: 1px solid #e5e5e5;
-      cursor: pointer; transition: background .1s;
-    }
-    .queue-item:hover { background: #f9fafb; }
-    .queue-item.selected { background: #fef2f2; border-left: 3px solid #E30613; }
-    .queue-item .thumb {
-      width: 48px; height: 48px; border-radius: 6px; object-fit: cover;
-      background: #eee; flex-shrink: 0;
-    }
-    .queue-meta { flex: 1; min-width: 0; }
-    .queue-meta strong { font-size: .85rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .queue-meta span { font-size: .75rem; color: #666; }
-    .zoom-controls { display: flex; gap: .4rem; padding: .5rem 1rem; background: #f5f5f5; border-top: 1px solid #e5e5e5; }
-    .zoom-controls button { padding: .25rem .6rem; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: .8rem; background: white; }
-    .decision-group { display: flex; gap: .75rem; margin-bottom: 1rem; }
-    .decision-opt {
-      flex: 1; padding: .75rem; border: 2px solid #e5e5e5; border-radius: 8px;
-      cursor: pointer; text-align: center; font-size: .85rem; font-weight: 600; transition: all .15s;
-    }
-    .decision-opt.aprobado.selected  { border-color: #16a34a; background: #f0fdf4; color: #166534; }
-    .decision-opt.rechazado.selected { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
-    .decision-opt:not(.selected):hover { background: #f9fafb; }
-    .no-pending { text-align: center; padding: 3rem 1rem; color: #888; }
-
-    /* Split redimensionable: imagen | divisor | datos+formulario */
-    .split { display: flex; align-items: stretch; height: calc(100vh - 170px); min-height: 480px; }
-    .split-left { flex: 1 1 auto; min-width: 240px; display: flex; }
-    .split-left .factura-viewer { display: flex; flex-direction: column; flex: 1; margin: 0; min-height: 0; }
-    .split-left .factura-img-wrap { flex: 1; overflow: auto; min-height: 0; background: #f5f5f5; }
-    .split-left .factura-img-wrap img { display: block; max-width: 100%; }
-    .split-divider { flex: 0 0 8px; cursor: col-resize; background: #e5e5e5; border-radius: 4px; margin: 0 .6rem; transition: background .1s; }
-    .split-divider:hover, .split-divider.dragging { background: #E30613; }
-    .split-right { flex: 0 0 440px; min-width: 320px; overflow-y: auto; padding-right: .3rem; }
-    .split-right .factura-form-panel { margin: 0; }
-    @media (max-width: 900px) {
-      .split { flex-direction: column; height: auto; }
-      .split-divider { display: none; }
-      .split-right { flex: 1 1 auto; }
-    }
+    .queue-item { display:flex; align-items:center; gap:.7rem; padding:.7rem 1rem; border-bottom:1px solid var(--line); cursor:pointer; }
+    .queue-item:hover { background:#fafbfc; }
+    .queue-item.selected { background:#fdf2fa; box-shadow: inset 3px 0 0 var(--sa-magenta); }
+    .queue-item .thumb { width:44px; height:44px; border-radius:8px; object-fit:cover; background:#eee; flex-shrink:0; }
+    .queue-meta strong { font-size:.85rem; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; }
+    .queue-meta span { font-size:.74rem; color:var(--muted); }
+    .decision-group { display:flex; gap:.6rem; margin-bottom:1rem; }
+    .decision-opt { flex:1; padding:.7rem; border:2px solid var(--line); border-radius:10px; cursor:pointer; text-align:center; font-size:.85rem; font-weight:700; }
+    .decision-opt.aprobado.selected { border-color:var(--green); background:var(--green-bg); color:#15803d; }
+    .decision-opt.rechazado.selected { border-color:var(--red); background:var(--red-bg); color:#b91c1c; }
+    .split { display:flex; align-items:stretch; height:calc(100vh - 150px); min-height:480px; }
+    .split-left { flex:1 1 auto; min-width:240px; display:flex; }
+    .split-left .factura-viewer { display:flex; flex-direction:column; flex:1; min-height:0; }
+    .split-left .factura-img-wrap { flex:1; min-height:0; }
+    .split-divider { flex:0 0 8px; cursor:col-resize; background:var(--line); border-radius:4px; margin:0 .6rem; }
+    .split-divider:hover,.split-divider.dragging { background:var(--sa-magenta); }
+    .split-right { flex:0 0 460px; min-width:340px; overflow-y:auto; padding-right:.3rem; }
+    .pdv-info { font-size:.8rem; color:var(--muted); background:#fbfbfc; border:1px solid var(--line); border-radius:10px; padding:.6rem .8rem; margin-top:.4rem; }
+    @media (max-width:980px){ .split{flex-direction:column;height:auto;} .split-divider{display:none;} .split-right{flex:1 1 auto;} }
   </style>
 </head>
 <body>
 <div class="layout">
   <aside class="sidebar" id="sidebar"></aside>
-
   <main class="main-content">
-    <div class="page-header">
-      <h1>✅ Aprobador de Facturas</h1>
-      <p>Facturas pendientes de revisión manual</p>
-    </div>
+    <div class="page-header"><div><h1>Aprobador de Facturas</h1><p>Revisión manual de facturas pendientes</p></div></div>
 
     <div style="display:grid;grid-template-columns:280px 1fr;gap:1.25rem;align-items:start;">
-
-      <!-- Cola -->
       <div class="table-wrap" style="position:sticky;top:1rem;max-height:calc(100vh - 120px);overflow-y:auto;">
-        <div class="table-header">
-          <h2>Cola <span id="colaBadge" class="badge badge-rojo" style="margin-left:.4rem;"></span></h2>
-          <button class="btn btn-secondary btn-sm" onclick="cargarCola()">↻</button>
-        </div>
+        <div class="table-header"><h2>Cola <span id="colaBadge" class="badge badge-rojo" style="margin-left:.3rem;"></span></h2>
+          <button class="btn btn-secondary btn-sm" onclick="cargarCola()">↻</button></div>
         <div id="colaList"></div>
       </div>
 
-      <!-- Panel principal -->
       <div>
-        <div id="emptyState" style="background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);">
-          <div class="no-pending">
-            <div style="font-size:3rem;margin-bottom:.5rem;">📭</div>
-            <div>Selecciona una factura de la cola para revisarla</div>
-          </div>
-        </div>
+        <div id="emptyState" class="card"><div class="empty"><div class="big">📭</div>Selecciona una factura de la cola</div></div>
 
         <div id="aprobadorPanel" style="display:none;">
          <div class="split" id="split">
-          <!-- Imagen (izquierda, redimensionable) -->
           <div class="split-left">
            <div class="factura-viewer">
-            <div class="factura-viewer-header">
-              📷 Imagen de la Factura
-              <span id="facturaId" style="font-size:.75rem;color:#888;float:right;"></span>
-            </div>
-            <div class="factura-img-wrap" id="imgWrap">
-              <img id="facturaImg" src="" alt="Factura" onclick="toggleZoom(this)"/>
-            </div>
+            <div class="factura-viewer-header">📷 Imagen de la Factura <span id="facturaId" style="font-size:.72rem;color:var(--muted-2);float:right;"></span></div>
+            <div class="factura-img-wrap" id="imgWrap"><img id="facturaImg" src="" alt="Factura" onclick="toggleZoom(this)"/></div>
             <div class="zoom-controls">
-              <button onclick="zoom(-0.25)">−</button>
-              <button onclick="zoom(0)">100%</button>
-              <button onclick="zoom(0.25)">+</button>
-              <a id="facturaLink" href="#" target="_blank" class="btn btn-secondary btn-sm" style="margin-left:auto;">Abrir original ↗</a>
+              <button onclick="zoom(-0.25)">−</button><button onclick="zoom(0)">100%</button><button onclick="zoom(0.25)">+</button>
+              <a id="facturaLink" href="#" target="_blank" class="btn btn-secondary btn-sm" style="margin-left:auto;">Abrir ↗</a>
             </div>
            </div>
           </div>
-
-          <!-- Divisor arrastrable -->
           <div class="split-divider" id="splitDivider" title="Arrastra para ajustar"></div>
-
-          <!-- Datos + formulario (derecha) -->
           <div class="split-right">
-          <!-- Datos del participante -->
-          <div style="background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:1rem 1.25rem;margin-bottom:1rem;">
-            <div style="font-size:.8rem;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:.6rem;">Datos del Participante</div>
-            <div id="participanteResumen" style="display:grid;grid-template-columns:auto 1fr;gap:.3rem .75rem;font-size:.84rem;"></div>
-          </div>
-
-          <!-- Formulario de revisión -->
-          <div class="factura-form-panel">
-            <div style="font-size:.8rem;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:.75rem;">Datos de la Factura</div>
-
-            <!-- Decisión -->
-            <div class="decision-group" id="decisionGroup">
-              <div class="decision-opt aprobado" id="optAprobado" onclick="setDecision('aprobado')">✅ Aprobada</div>
-              <div class="decision-opt rechazado" id="optRechazado" onclick="setDecision('rechazado')">❌ Rechazada</div>
+           <div class="factura-form-panel">
+            <div class="card-title">Establecimiento (PDV)</div>
+            <div class="form-group"><label class="form-label">NIT leído</label><input class="form-control" id="f_nit" readonly/></div>
+            <div class="form-group"><label class="form-label">Cliente *</label>
+              <select class="form-control" id="f_cliente" onchange="onCliente()"><option value="">Cargando...</option></select>
             </div>
+            <div class="pdv-info" id="pdvInfo">Agente / Departamento / Ciudad aparecerán al elegir el cliente.</div>
 
-            <div id="camposAprobado">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
-                <div class="form-group"><label class="form-label">Establecimiento *</label><input class="form-control" id="f_establecimiento"/></div>
-                <div class="form-group"><label class="form-label">Ciudad *</label><input class="form-control" id="f_ciudad"/></div>
-                <div class="form-group"><label class="form-label">Fecha de Compra *</label><input class="form-control" type="date" id="f_fecha_compra"/></div>
-                <div class="form-group"><label class="form-label">Referencia del Producto *</label><input class="form-control" id="f_referencia_producto"/></div>
-                <div class="form-group"><label class="form-label">Presentación *</label>
-                  <select class="form-control" id="f_presentacion">
-                    <option value="">Seleccionar...</option>
-                    <option>Balde</option><option>Galón</option><option>Cuarto</option><option>Otra</option>
-                  </select>
-                </div>
-                <div class="form-group"><label class="form-label">Cantidad *</label><input class="form-control" type="number" step="0.01" id="f_cantidad"/></div>
-                <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Valor Total ($) *</label><input class="form-control" type="number" step="0.01" id="f_valor_total"/></div>
-              </div>
+            <div class="card-title" style="margin-top:1.1rem;">Producto y factura</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
+              <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Referencia del producto</label><input class="form-control" id="f_referencia_producto"/></div>
+              <div class="form-group"><label class="form-label">Presentación</label><input class="form-control" id="f_presentacion"/></div>
+              <div class="form-group"><label class="form-label">Fecha de compra</label><input class="form-control" type="date" id="f_fecha_compra"/></div>
+              <div class="form-group"><label class="form-label">Cantidad</label><input class="form-control" type="number" step="0.01" id="f_cantidad"/></div>
+              <div class="form-group"><label class="form-label">Valor total ($)</label><input class="form-control" type="number" step="0.01" id="f_valor_total"/></div>
             </div>
+            <div class="pdv-info" id="motivoBox" style="display:none;"></div>
 
+            <div class="card-title" style="margin-top:1.1rem;">Decisión</div>
+            <div class="decision-group">
+              <div class="decision-opt aprobado" id="optAprobado" onclick="setDecision('aprobado')">✅ Aprobar</div>
+              <div class="decision-opt rechazado" id="optRechazado" onclick="setDecision('rechazado')">❌ Rechazar</div>
+            </div>
             <div id="camposRechazado" style="display:none;">
-              <div class="form-group">
-                <label class="form-label">Razón de rechazo *</label>
+              <div class="form-group"><label class="form-label">Razón *</label>
                 <select class="form-control" id="f_razon_rechazo" onchange="mostrarOtro()">
                   <option value="">Seleccionar...</option>
                   <option value="foto_ilegible">Factura o foto no legible</option>
-                  <option value="fuera_periodo">Factura fuera del período de participación</option>
-                  <option value="producto_no_participante">Producto, referencia o presentación no participante</option>
+                  <option value="fuera_periodo">Factura fuera de fechas de participación</option>
+                  <option value="producto_no_participante">Producto/presentación no participante</option>
                   <option value="establecimiento_no_participante">Establecimiento no participante</option>
-                  <option value="factura_duplicada">Factura ya registrada anteriormente</option>
-                  <option value="valor_insuficiente">Valor inferior al mínimo requerido</option>
+                  <option value="factura_duplicada">Factura ya registrada</option>
+                  <option value="valor_insuficiente">Valor inferior al mínimo</option>
                   <option value="otro">Otro</option>
                 </select>
               </div>
-              <div class="form-group" id="campoOtro" style="display:none;">
-                <label class="form-label">Detalle</label>
-                <input class="form-control" id="f_razon_detalle" placeholder="Describe la razón..."/>
-              </div>
+              <div class="form-group" id="campoOtro" style="display:none;"><label class="form-label">Detalle</label><input class="form-control" id="f_razon_detalle"/></div>
             </div>
-
-            <div style="display:flex;gap:.75rem;margin-top:1rem;">
-              <button class="btn btn-primary" onclick="guardarRevision()" id="btnGuardar" disabled>Guardar Revisión</button>
-              <button class="btn btn-secondary" onclick="siguienteFact()">Siguiente →</button>
+            <div style="display:flex;gap:.6rem;margin-top:1rem;">
+              <button class="btn btn-primary" onclick="guardar()" id="btnGuardar" disabled>Guardar revisión</button>
+              <button class="btn btn-secondary" onclick="siguiente()">Siguiente →</button>
             </div>
+           </div>
           </div>
-          </div><!-- /split-right -->
-         </div><!-- /split -->
+         </div>
         </div>
       </div>
     </div>
@@ -176,197 +113,129 @@
 
 <script src="assets/js/auth.js"></script>
 <script>
-let cola = [], facturaActual = null, decision = null, zoomLevel = 1;
+let cola=[], actual=null, decision=null, zoomLevel=1, pdvs=[];
 
-async function init() {
-  requireRole(['admin','agente']);
-  renderSidebar('aprobador');
-  await cargarCola();
+async function init(){ requireRole(['admin','agente']); renderSidebar('aprobador'); await cargarCola(); initSplitter(); }
+
+async function cargarCola(){
+  const res = await apiFetch('api/facturas/pendientes'); if(!res) return;
+  cola = await res.json(); renderCola();
 }
-
-async function cargarCola() {
-  const res = await apiFetch('api/facturas/pendientes');
-  if (!res) return;
-  cola = await res.json();
-  renderCola();
-}
-
-function renderCola() {
-  const el = document.getElementById('colaList');
+function renderCola(){
   document.getElementById('colaBadge').textContent = cola.length;
-  if (!cola.length) {
-    el.innerHTML = '<div class="no-pending"><div style="font-size:2rem;">✅</div><div>Cola vacía</div></div>';
-    return;
-  }
-  el.innerHTML = cola.map(f => `
-    <div class="queue-item" id="qi_${f.id}" onclick="cargarFactura('${f.id}')">
-      <img class="thumb" src="${f.imagen_url}" onerror="this.style.background='#ddd';this.removeAttribute('src')"/>
-      <div class="queue-meta">
-        <strong>${f.participant?.nombre_piloto || '—'}</strong>
-        <span>${f.participant?.cedula || ''} · ${confianzaLabel(f.ocr_confianza)}</span>
-      </div>
-    </div>
-  `).join('');
+  const el = document.getElementById('colaList');
+  if(!cola.length){ el.innerHTML='<div class="empty" style="padding:2rem 1rem"><div class="big">✅</div>Cola vacía</div>'; return; }
+  el.innerHTML = cola.map(f=>`
+    <div class="queue-item" id="qi_${f.id}" onclick="abrir('${f.id}')">
+      <img class="thumb" src="${f.imagen_url}" onerror="this.style.visibility='hidden'"/>
+      <div class="queue-meta"><strong>${f.participant?.nombre_piloto||'—'}</strong>
+      <span>NIT ${f.nit||'?'} · ${conf(f.match_confianza)}</span></div>
+    </div>`).join('');
 }
+function conf(c){ return c==null?'—':Math.round(c*100)+'%'; }
 
-function confianzaLabel(c) {
-  if (c == null) return '—';
-  if (c >= .8) return `✅ ${Math.round(c*100)}%`;
-  if (c >= .6) return `⚠️ ${Math.round(c*100)}%`;
-  return `❌ ${Math.round(c*100)}%`;
-}
-
-async function cargarFactura(id) {
-  const res = await apiFetch(`api/facturas/${id}`);
-  if (!res) return;
-  facturaActual = await res.json();
-  decision = null;
-
-  // Highlight en cola
-  document.querySelectorAll('.queue-item').forEach(el => el.classList.remove('selected'));
+async function abrir(id){
+  const res = await apiFetch(`api/facturas/${id}`); if(!res) return;
+  actual = await res.json(); decision=null;
+  document.querySelectorAll('.queue-item').forEach(e=>e.classList.remove('selected'));
   document.getElementById(`qi_${id}`)?.classList.add('selected');
 
-  // Imagen
-  document.getElementById('facturaImg').src = facturaActual.imagen_url;
-  document.getElementById('facturaLink').href = facturaActual.imagen_url;
-  document.getElementById('facturaId').textContent = id.slice(0,8) + '...';
-  zoomLevel = 1;
-  document.getElementById('facturaImg').style.transform = '';
+  document.getElementById('facturaImg').src = actual.imagen_url;
+  document.getElementById('facturaLink').href = actual.imagen_url;
+  document.getElementById('facturaId').textContent = id.slice(0,8);
+  zoomLevel=1; document.getElementById('facturaImg').style.transform='';
 
-  // Participante
-  const p = facturaActual.participant || {};
-  document.getElementById('participanteResumen').innerHTML = `
-    <span style="color:#666">Nombre</span><span>${p.nombre_piloto||'—'}</span>
-    <span style="color:#666">Cédula</span><span>${p.cedula||'—'}</span>
-    <span style="color:#666">Celular</span><span>${p.phone||'—'}</span>
-    <span style="color:#666">Ciudad</span><span>${p.ciudad||'—'}</span>
-    <span style="color:#666">Copiloto</span><span>${p.nombre_copiloto||'—'}</span>
-    <span style="color:#666">Placa</span><span>${p.vehiculo_placa||'—'}</span>
-    <span style="color:#666">Código</span><span>${p.codigo_preregistro||'—'}</span>
-    <span style="color:#666">Motivo revisión</span><span style="color:#ca8a04">${facturaActual.ocr_motivo_revision||'—'}</span>
-  `;
+  document.getElementById('f_nit').value = actual.nit || actual.ocr_establecimiento || '';
+  setVal('f_referencia_producto', actual.producto_catalogo || actual.ocr_referencia_producto);
+  setVal('f_presentacion', actual.ocr_presentacion);
+  setVal('f_fecha_compra', actual.ocr_fecha_compra);
+  setVal('f_cantidad', actual.ocr_cantidad);
+  setVal('f_valor_total', actual.ocr_valor_total);
 
-  // Precargar campos OCR
-  setVal('f_establecimiento', facturaActual.ocr_establecimiento);
-  setVal('f_ciudad', facturaActual.ocr_ciudad);
-  setVal('f_fecha_compra', facturaActual.ocr_fecha_compra);
-  setVal('f_referencia_producto', facturaActual.ocr_referencia_producto);
-  setVal('f_presentacion', facturaActual.ocr_presentacion);
-  setVal('f_cantidad', facturaActual.ocr_cantidad);
-  setVal('f_valor_total', facturaActual.ocr_valor_total);
+  const mb = document.getElementById('motivoBox');
+  if(actual.ocr_motivo_revision){ mb.style.display='block'; mb.textContent='⚠️ '+actual.ocr_motivo_revision; } else mb.style.display='none';
 
-  // Resetear decisión
+  // Cargar clientes del NIT
+  await cargarClientes(actual.nit);
+
   document.getElementById('optAprobado').classList.remove('selected');
   document.getElementById('optRechazado').classList.remove('selected');
-  document.getElementById('camposAprobado').style.display = 'block';
-  document.getElementById('camposRechazado').style.display = 'none';
-  document.getElementById('btnGuardar').disabled = true;
-
-  document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('aprobadorPanel').style.display = 'block';
+  document.getElementById('camposRechazado').style.display='none';
+  document.getElementById('btnGuardar').disabled=true;
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('aprobadorPanel').style.display='block';
 }
 
-function setVal(id, val) {
-  const el = document.getElementById(id);
-  if (el && val != null) el.value = val;
+async function cargarClientes(nit){
+  const sel = document.getElementById('f_cliente');
+  const res = await apiFetch('api/pdv' + (nit?`?nit=${encodeURIComponent(nit)}`:''));
+  pdvs = res ? await res.json() : [];
+  if(!pdvs.length){
+    // sin coincidencia por NIT → ofrecer todos para elegir manual
+    const all = await apiFetch('api/pdv'); pdvs = all? await all.json():[];
+    sel.innerHTML = '<option value="">— NIT no coincide, elegir cliente manualmente —</option>' + pdvs.map(p=>`<option value="${p.id}">${p.cliente} (${p.nit||'s/NIT'})</option>`).join('');
+  } else {
+    sel.innerHTML = '<option value="">Seleccionar cliente...</option>' + pdvs.map(p=>`<option value="${p.id}">${p.cliente}</option>`).join('');
+    if(pdvs.length===1){ sel.value=pdvs[0].id; }
+  }
+  onCliente();
+}
+function onCliente(){
+  const p = pdvs.find(x=>String(x.id)===document.getElementById('f_cliente').value);
+  document.getElementById('pdvInfo').innerHTML = p
+    ? `<b>Agente:</b> ${p.agente||'—'} &nbsp;·&nbsp; <b>Depto:</b> ${p.departamento||'—'} &nbsp;·&nbsp; <b>Ciudad:</b> ${p.ciudad||'—'}`
+    : 'Agente / Departamento / Ciudad aparecerán al elegir el cliente.';
 }
 
-function setDecision(d) {
-  decision = d;
-  document.getElementById('optAprobado').classList.toggle('selected', d === 'aprobado');
-  document.getElementById('optRechazado').classList.toggle('selected', d === 'rechazado');
-  document.getElementById('camposAprobado').style.display = d === 'aprobado' ? 'block' : 'none';
-  document.getElementById('camposRechazado').style.display = d === 'rechazado' ? 'block' : 'none';
-  document.getElementById('btnGuardar').disabled = false;
+function setVal(id,v){ const e=document.getElementById(id); if(e&&v!=null) e.value=v; }
+function setDecision(d){
+  decision=d;
+  document.getElementById('optAprobado').classList.toggle('selected',d==='aprobado');
+  document.getElementById('optRechazado').classList.toggle('selected',d==='rechazado');
+  document.getElementById('camposRechazado').style.display = d==='rechazado'?'block':'none';
+  document.getElementById('btnGuardar').disabled=false;
 }
+function mostrarOtro(){ document.getElementById('campoOtro').style.display = document.getElementById('f_razon_rechazo').value==='otro'?'block':'none'; }
 
-function mostrarOtro() {
-  const v = document.getElementById('f_razon_rechazo').value;
-  document.getElementById('campoOtro').style.display = v === 'otro' ? 'block' : 'none';
-}
-
-async function guardarRevision() {
-  if (!facturaActual || !decision) return;
-  const btn = document.getElementById('btnGuardar');
-  btn.disabled = true; btn.textContent = 'Guardando...';
-
+async function guardar(){
+  if(!actual||!decision) return;
+  const btn=document.getElementById('btnGuardar'); btn.disabled=true; btn.textContent='Guardando...';
   let res;
-  if (decision === 'aprobado') {
-    const body = {
-      establecimiento: v('f_establecimiento'), ciudad: v('f_ciudad'),
-      fecha_compra: v('f_fecha_compra'), referencia_producto: v('f_referencia_producto'),
-      presentacion: v('f_presentacion'), cantidad: parseFloat(v('f_cantidad')),
-      valor_total: parseFloat(v('f_valor_total')),
-    };
-    res = await apiFetch(`api/facturas/${facturaActual.id}/aprobar`, { method: 'PATCH', body: JSON.stringify(body) });
+  if(decision==='aprobado'){
+    const pdv_id = document.getElementById('f_cliente').value;
+    if(!pdv_id){ showToast('Selecciona el Cliente (PDV)','error'); reset(btn); return; }
+    res = await apiFetch(`api/facturas/${actual.id}/aprobar`, { method:'PATCH', body: JSON.stringify({
+      pdv_id, referencia_producto:v('f_referencia_producto'), presentacion:v('f_presentacion'),
+      cantidad:parseFloat(v('f_cantidad'))||null, valor_total:parseFloat(v('f_valor_total'))||null, fecha_compra:v('f_fecha_compra')||null,
+    })});
   } else {
-    const razon = v('f_razon_rechazo');
-    if (!razon) { showToast('Selecciona razón de rechazo', 'error'); btn.disabled = false; btn.textContent = 'Guardar Revisión'; return; }
-    res = await apiFetch(`api/facturas/${facturaActual.id}/rechazar`, {
-      method: 'PATCH',
-      body: JSON.stringify({ razon_rechazo: razon, razon_rechazo_detalle: v('f_razon_detalle') }),
-    });
+    const razon=v('f_razon_rechazo');
+    if(!razon){ showToast('Selecciona la razón','error'); reset(btn); return; }
+    res = await apiFetch(`api/facturas/${actual.id}/rechazar`, { method:'PATCH', body: JSON.stringify({ razon_rechazo:razon, razon_rechazo_detalle:v('f_razon_detalle') })});
   }
-
-  const data = await res?.json();
-  if (res?.ok) {
-    showToast(`Factura ${decision === 'aprobado' ? 'aprobada' : 'rechazada'} correctamente`, 'ok');
-    cola = cola.filter(f => f.id !== facturaActual.id);
-    facturaActual = null;
-    document.getElementById('aprobadorPanel').style.display = 'none';
-    document.getElementById('emptyState').style.display = 'block';
+  const j = await res?.json();
+  if(res?.ok){
+    showToast(decision==='aprobado'?(j.estado==='confirmado'?'Aprobada y cupo confirmado':'Aprobada — cupo lleno, lista de espera'):'Factura rechazada','ok');
+    cola=cola.filter(f=>f.id!==actual.id); actual=null;
+    document.getElementById('aprobadorPanel').style.display='none';
+    document.getElementById('emptyState').style.display='block';
     renderCola();
-  } else {
-    showToast(data?.error || 'Error al guardar', 'error');
-  }
-  btn.disabled = false; btn.textContent = 'Guardar Revisión';
+  } else showToast(j?.error||'Error al guardar','error');
+  reset(btn);
 }
+function reset(btn){ btn.disabled=false; btn.textContent='Guardar revisión'; }
+function siguiente(){ const i=cola.findIndex(f=>f.id===actual?.id); const n=cola[i+1]||cola[0]; if(n) abrir(n.id); }
+const v = id => document.getElementById(id)?.value || '';
 
-function siguienteFact() {
-  const idx = cola.findIndex(f => f.id === facturaActual?.id);
-  const next = cola[idx + 1] || cola[0];
-  if (next) cargarFactura(next.id);
+function zoom(d){ const img=document.getElementById('facturaImg'); if(d===0){zoomLevel=1;img.style.transform='';return;} zoomLevel=Math.max(.5,Math.min(4,zoomLevel+d)); img.style.transform=`scale(${zoomLevel})`; }
+function toggleZoom(img){ zoomLevel=zoomLevel>1?1:2; img.style.transform=zoomLevel>1?`scale(${zoomLevel})`:''; }
+function initSplitter(){
+  const d=document.getElementById('splitDivider'); if(!d) return; let drag=false;
+  d.addEventListener('mousedown',e=>{drag=true;d.classList.add('dragging');document.body.style.userSelect='none';e.preventDefault();});
+  window.addEventListener('mousemove',e=>{ if(!drag)return; const s=document.getElementById('split'); const r=s.getBoundingClientRect();
+    let w=Math.max(340,Math.min(r.width-260, r.right-e.clientX)); document.querySelector('.split-right').style.flexBasis=w+'px'; });
+  window.addEventListener('mouseup',()=>{ if(drag){drag=false;d.classList.remove('dragging');document.body.style.userSelect='';} });
 }
-
-function v(id) { return document.getElementById(id)?.value || ''; }
-
-function zoom(delta) {
-  const img = document.getElementById('facturaImg');
-  if (delta === 0) { zoomLevel = 1; img.style.transform = ''; return; }
-  zoomLevel = Math.max(0.5, Math.min(4, zoomLevel + delta));
-  img.style.transform = `scale(${zoomLevel})`;
-  img.style.transformOrigin = 'top left';
-}
-
-function toggleZoom(img) {
-  zoomLevel = zoomLevel > 1 ? 1 : 2;
-  img.style.transform = zoomLevel > 1 ? `scale(${zoomLevel})` : '';
-}
-
-// Divisor arrastrable entre imagen y formulario
-(function initSplitter() {
-  const divider = document.getElementById('splitDivider');
-  if (!divider) return;
-  let dragging = false;
-  divider.addEventListener('mousedown', (e) => {
-    dragging = true; divider.classList.add('dragging');
-    document.body.style.userSelect = 'none'; e.preventDefault();
-  });
-  window.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    const split = document.getElementById('split');
-    const rect = split.getBoundingClientRect();
-    let rightW = rect.right - e.clientX;
-    rightW = Math.max(320, Math.min(rect.width - 260, rightW));
-    const right = document.querySelector('.split-right');
-    if (right) right.style.flexBasis = rightW + 'px';
-  });
-  window.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false; divider.classList.remove('dragging'); document.body.style.userSelect = '';
-  });
-})();
-
 init();
 </script>
 </body>

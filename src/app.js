@@ -17,12 +17,15 @@ const publicDir = path.join(__dirname, '..', 'public');
 // si lo hace, el contenedor recibe `/...`; si no, recibe `/gpmd-chatbot/...`.
 function buildRouter() {
   const r = express.Router();
-  r.use('/api/auth',      require('./routes/auth'));
-  r.use('/api/agenda',    require('./routes/agenda'));
-  r.use('/api/facturas',  require('./routes/facturas'));
-  r.use('/api/dashboard', require('./routes/dashboard'));
-  r.use('/api/log',       require('./routes/log'));
-  r.use('/api/usuarios',  require('./routes/usuarios'));
+  r.use('/api/auth',          require('./routes/auth'));
+  r.use('/api/participantes', require('./routes/participantes'));
+  r.use('/api/facturas',      require('./routes/facturas'));
+  r.use('/api/pdv',           require('./routes/pdv'));
+  r.use('/api/productos',     require('./routes/productos'));
+  r.use('/api/buscar',        require('./routes/buscar'));
+  r.use('/api/dashboard',     require('./routes/dashboard'));
+  r.use('/api/log',           require('./routes/log'));
+  r.use('/api/usuarios',      require('./routes/usuarios'));
 
   // Webhook entrante de WATI (chatbot WhatsApp)
   r.use('/webhook/wati',  require('./routes/wati'));

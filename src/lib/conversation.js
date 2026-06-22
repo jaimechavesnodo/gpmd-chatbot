@@ -4,89 +4,70 @@ const supabase = require('./supabase');
 const wati = require('./wati');
 const ocr = require('./ocr');
 
-// ---------- Catálogo de pasos de registro (en orden) ----------
+const TIPO_DOC = ['Cédula', 'Pasaporte', 'Otro'];
 const RH = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+const LIMITE_CONFIRMADOS = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150;
 
+// ---------- Pasos del registro (en orden) ----------
+// tras 'email' (último campo del piloto) se crea el participante 'pre_registrado'.
 const STEPS = [
-  { field: 'cedula',
-    q: 'Para empezar, ¿cuál es tu *número de cédula*? (solo números)',
-    validate: (v) => (/^\d{5,12}$/.test(v.replace(/\D/g, '')) ? null : 'La cédula debe tener entre 5 y 12 dígitos. Inténtalo de nuevo:'),
-    normalize: (v) => v.replace(/\D/g, '') },
   { field: 'nombre_piloto',
-    q: '¿Cuál es tu *nombre completo* (piloto)?',
-    validate: (v) => (v.trim().length >= 3 ? null : 'Por favor escribe tu nombre completo:') },
-  { field: 'edad',
-    q: '¿Qué *edad* tienes?',
-    validate: (v) => { const n = parseInt(v); return n >= 18 && n <= 99 ? null : 'Indica una edad válida (18-99):'; },
-    normalize: (v) => parseInt(v) },
-  { field: 'tipo_participacion',
-    q: '¿Eres piloto *novato* o *experto*?\n\n1️⃣ Novato\n2️⃣ Experto\n\nResponde *1* o *2*.',
-    validate: (v) => { const t = parseTipo(v); return t ? null : 'Responde *1* (Novato) o *2* (Experto):'; },
-    normalize: (v) => parseTipo(v) },
-  { field: 'participaciones_anteriores',
-    q: '¿En *cuántas* ediciones anteriores del Gran Premio has participado?',
-    skipIf: (d) => d.tipo_participacion === 'novato',
-    default: 0,
-    validate: (v) => { const n = parseInt(v); return n >= 0 && n <= 50 ? null : 'Indica un número válido:'; },
-    normalize: (v) => parseInt(v) },
-  { field: 'rh',
-    q: '¿Cuál es tu *grupo sanguíneo y RH*? (ej: O+, A-, B+)',
-    validate: (v) => (RH.includes(normRH(v)) ? null : 'Indica un RH válido (O+, O-, A+, A-, B+, B-, AB+, AB-):'),
-    normalize: (v) => normRH(v) },
-  { field: 'eps',
-    q: '¿A qué *EPS* estás afiliado?',
-    validate: (v) => (v.trim().length >= 2 ? null : 'Escribe el nombre de tu EPS:') },
-  { field: 'ciudad',
-    q: '¿En qué *ciudad* resides?',
-    validate: (v) => (v.trim().length >= 2 ? null : 'Escribe tu ciudad:') },
-  { field: 'departamento',
-    q: '¿En qué *departamento*?',
-    validate: (v) => (v.trim().length >= 2 ? null : 'Escribe tu departamento:') },
+    q: 'Para empezar, ¿cuál es tu *nombre y apellidos completos* (piloto)?',
+    validate: (v) => (v.trim().length >= 3 ? null : 'Escribe tu nombre completo:') },
+  { field: 'novato', opciones: ['Novato', 'No novato'],
+    q: '¿Eres piloto *NOVATO* o *NO NOVATO*?',
+    normalize: (v) => v === 'Novato' },
+  { field: 'tipo_documento_piloto', opciones: TIPO_DOC,
+    q: '¿Qué *tipo de documento* tienes?' },
+  { field: 'cedula',
+    q: '¿Cuál es tu *número de documento*? (solo el número)',
+    validate: (v) => (v.replace(/\s/g, '').length >= 4 ? null : 'Escribe un número de documento válido:'),
+    normalize: (v) => v.replace(/\s/g, '') },
+  { field: 'rh', opciones: RH,
+    q: '¿Cuál es tu *grupo sanguíneo y RH*?' },
   { field: 'email',
-    q: '¿Cuál es tu *correo electrónico*? (si no tienes, escribe *no*)',
-    optional: true,
-    validate: (v) => (/^no$/i.test(v.trim()) || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim()) ? null : 'Escribe un correo válido o *no*:'),
+    q: '¿Cuál es tu *correo electrónico*?',
+    validate: (v) => (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim()) ? null : 'Escribe un correo válido (ej: nombre@dominio.com):'),
+    normalize: (v) => v.trim(),
+    afterCreate: true },
+  // --- Copiloto (opcional) ---
+  { field: 'tiene_copiloto', opciones: ['Sí', 'No'], ephemeral: true,
+    q: '¿Vas a registrar un *copiloto*?',
+    normalize: (v) => v === 'Sí' },
+  { field: 'nombre_copiloto', skipIf: (d) => !d.tiene_copiloto,
+    q: 'Nombre y apellidos del *copiloto*:',
+    validate: (v) => (v.trim().length >= 3 ? null : 'Escribe el nombre del copiloto:') },
+  { field: 'tipo_documento_copiloto', opciones: TIPO_DOC, skipIf: (d) => !d.tiene_copiloto,
+    q: '*Tipo de documento* del copiloto:' },
+  { field: 'numero_documento_copiloto', skipIf: (d) => !d.tiene_copiloto,
+    q: '*Número de documento* del copiloto:',
+    normalize: (v) => v.replace(/\s/g, '') },
+  { field: 'rh_copiloto', opciones: RH, skipIf: (d) => !d.tiene_copiloto,
+    q: '*RH* del copiloto:' },
+  // --- Vehículo (opcional) ---
+  { field: 'vehiculo_marca', optional: true,
+    q: '¿*Marca y modelo* del vehículo? (opcional, escribe *no* para omitir)',
     normalize: (v) => (/^no$/i.test(v.trim()) ? '' : v.trim()) },
-  { field: 'nombre_copiloto',
-    q: '¿Cuál es el *nombre de tu copiloto*? (si no tienes, escribe *no*)',
-    optional: true,
-    normalize: (v) => (/^no$/i.test(v.trim()) ? '' : v.trim()) },
-  { field: 'vehiculo_marca',
-    q: 'Ahora los datos del *vehículo*. ¿Cuál es la *marca*? (ej: Kenworth, International, Freightliner)',
-    validate: (v) => (v.trim().length >= 2 ? null : 'Escribe la marca del vehículo:') },
-  { field: 'vehiculo_modelo',
-    q: '¿Cuál es el *modelo / línea* del vehículo?',
-    validate: (v) => (v.trim().length >= 1 ? null : 'Escribe el modelo:') },
-  { field: 'vehiculo_cilindrada',
-    q: '¿Cuál es la *cilindrada* del motor? (ej: 12000 cc, 15L)' },
-  { field: 'vehiculo_empresa',
-    q: '¿A qué *empresa de transporte* perteneces? (si eres independiente, escribe *independiente*)',
-    optional: true },
-  { field: 'vehiculo_placa',
-    q: 'Por último, ¿cuál es la *placa* del vehículo?',
-    validate: (v) => (v.replace(/\s/g, '').length >= 5 ? null : 'Escribe una placa válida:'),
-    normalize: (v) => v.replace(/\s/g, '').toUpperCase() },
+  { field: 'vehiculo_placa', optional: true,
+    q: '¿*Placa* del vehículo? (opcional, escribe *no* para omitir)',
+    normalize: (v) => (/^no$/i.test(v.trim()) ? '' : v.replace(/\s/g, '').toUpperCase()) },
 ];
 
-function parseTipo(v) {
-  const s = v.trim().toLowerCase();
-  if (s === '1' || s.includes('novato')) return 'novato';
-  if (s === '2' || s.includes('experto')) return 'experto';
-  return null;
+function parseOpcion(text, opciones) {
+  const s = text.trim().toLowerCase();
+  const n = parseInt(s);
+  if (n >= 1 && n <= opciones.length) return opciones[n - 1];
+  const m = opciones.find((o) => o.toLowerCase() === s || o.toLowerCase().includes(s) && s.length >= 2);
+  return m || null;
 }
-function normRH(v) { return v.trim().toUpperCase().replace(/\s/g, '').replace('POSITIVO', '+').replace('NEGATIVO', '-'); }
-
-const DIA_LABEL = {
-  '2026-07-21': 'martes 21', '2026-07-22': 'miércoles 22',
-  '2026-07-23': 'jueves 23', '2026-07-24': 'viernes 24',
-};
-
-// Etiqueta legible de un turno, ej: "martes 21 de julio - PM"
-function etiquetaFecha(fecha, franja) {
-  const f = typeof fecha === 'string' ? fecha.slice(0, 10) : fecha;
-  return `${DIA_LABEL[f] || f} de julio - ${franja}`;
+function formatOpciones(opciones) {
+  const nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣'];
+  return opciones.map((o, i) => `${nums[i] || (i + 1) + '.'} ${o}`).join('\n');
 }
-
+function preguntar(step) {
+  if (step.opciones) return `${step.q}\n\n${formatOpciones(step.opciones)}\n\nResponde con el número.`;
+  return step.q;
+}
 function genCodigo() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let c = 'GPMD-';
@@ -98,31 +79,23 @@ function genCodigo() {
 async function loadConv(phone) {
   const { data } = await supabase.from('gpmd_conversaciones').select('*').eq('phone', phone).maybeSingle();
   if (data) return data;
-  const nuevo = { phone, step: 'inicio', data: {}, slots_cache: null };
+  const nuevo = { phone, step: 'inicio', data: {} };
   await supabase.from('gpmd_conversaciones').insert(nuevo);
   return nuevo;
 }
 async function saveConv(phone, patch) {
   await supabase.from('gpmd_conversaciones').update(patch).eq('phone', phone);
 }
-
 function stepIndex(field) { return STEPS.findIndex((s) => s.field === field); }
-
-// Devuelve el siguiente paso aplicable (respeta skipIf), o null si terminó
 function nextStep(fromIdx, data) {
   for (let i = fromIdx; i < STEPS.length; i++) {
-    if (STEPS[i].skipIf && STEPS[i].skipIf(data)) {
-      if (STEPS[i].default !== undefined) data[STEPS[i].field] = STEPS[i].default;
-      continue;
-    }
+    if (STEPS[i].skipIf && STEPS[i].skipIf(data)) continue;
     return STEPS[i];
   }
   return null;
 }
 
 // ---------- Procesamiento principal ----------
-// msg: { phone, text, type, mediaFileName, senderName }
-// send: función async (phone, mensaje) — por defecto wati.sendSessionMessage
 async function processIncoming(msg, send = wati.sendSessionMessage) {
   const phone = (msg.phone || '').replace(/\D/g, '');
   const text = (msg.text || '').trim();
@@ -130,198 +103,124 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
 
   const conv = await loadConv(phone);
 
-  // Comando global de reinicio
   if (/^(reiniciar|empezar de nuevo|reset)$/i.test(text)) {
-    await saveConv(phone, { step: 'inicio', data: {}, slots_cache: null });
+    await saveConv(phone, { step: 'inicio', data: {} });
     conv.step = 'inicio'; conv.data = {};
   }
 
   // --- INICIO ---
   if (conv.step === 'inicio') {
     const { data: part } = await supabase
-      .from('gpmd_participants')
-      .select('estado, codigo_preregistro, nombre_piloto')
+      .from('gpmd_participants').select('estado, codigo_preregistro, nombre_piloto')
       .eq('phone', phone).maybeSingle();
 
-    if (part && ['aprobado'].includes(part.estado)) {
-      await send(phone, `✅ ¡Hola de nuevo${part.nombre_piloto ? ', ' + part.nombre_piloto.split(' ')[0] : ''}! Ya tienes tu registro *APROBADO* en el Gran Premio Mobil Delvac 2026.\n\n🏁 Tu código: *${part.codigo_preregistro}*\n\nSi necesitas ayuda, escribe a un asesor.`);
+    if (part && part.estado === 'confirmado') {
+      await send(phone, `✅ ¡Hola de nuevo${part.nombre_piloto ? ', ' + part.nombre_piloto.split(' ')[0] : ''}! Tu cupo en el *Gran Premio Mobil Delvac 2026* ya está *CONFIRMADO*.\n\n🏁 Código: *${part.codigo_preregistro}*`);
       return conv;
     }
 
     await send(phone,
       '🏁 *¡Bienvenido al Gran Premio Mobil Delvac 2026!* 🚛\n\n'
-      + 'Te ayudaré a completar tu *pre-registro* para la revisión tecno-mecánica (21 al 24 de julio).\n\n'
-      + 'Te haré algunas preguntas, elegirás tu turno y al final subirás la foto de tu factura de compra Mobil Delvac.\n\n'
-      + 'En cualquier momento puedes escribir *reiniciar* para empezar de nuevo.');
+      + 'Te ayudaré con tu *preregistro*. Te haré unas preguntas y al final subirás la *foto de tu factura* de compra de producto Mobil Delvac participante.\n\n'
+      + 'Tu cupo quedará *confirmado* cuando validemos la factura.\n\n'
+      + 'En cualquier momento puedes escribir *reiniciar*.');
     const first = nextStep(0, conv.data);
     await saveConv(phone, { step: `reg:${first.field}`, data: conv.data });
-    await send(phone, first.q);
+    await send(phone, preguntar(first));
     return conv;
   }
 
   // --- RECOLECCIÓN DE DATOS ---
   if (conv.step.startsWith('reg:')) {
     const field = conv.step.slice(4);
-    const idx = stepIndex(field);
-    const step = STEPS[idx];
+    const step = STEPS[stepIndex(field)];
+    if (!text) { await send(phone, preguntar(step)); return conv; }
 
-    if (!text) { await send(phone, step.q); return conv; }
+    let valor;
+    if (step.opciones) {
+      const op = parseOpcion(text, step.opciones);
+      if (!op) { await send(phone, '⚠️ Responde con el número de una de las opciones:\n\n' + formatOpciones(step.opciones)); return conv; }
+      valor = step.normalize ? step.normalize(op) : op;
+    } else {
+      const err = step.validate ? step.validate(text) : null;
+      if (err) { await send(phone, '⚠️ ' + err); return conv; }
+      valor = step.normalize ? step.normalize(text) : text.trim();
+    }
+    conv.data[field] = valor;
 
-    const err = step.validate ? step.validate(text) : null;
-    if (err) { await send(phone, '⚠️ ' + err); return conv; }
+    // Tras completar el bloque del piloto (email) → crear participante pre_registrado
+    if (step.afterCreate) {
+      const err = await crearParticipante(phone, conv.data);
+      if (err) { await send(phone, '⚠️ ' + err); return conv; }
+      wati.updateContactAttributes(phone, [{ name: 'registrado', value: 'true' }]).catch(() => {});
+      await send(phone, '✅ ¡Datos del piloto guardados!');
+    }
 
-    conv.data[field] = step.normalize ? step.normalize(text) : text.trim();
-
-    const next = nextStep(idx + 1, conv.data);
+    const next = nextStep(stepIndex(field) + 1, conv.data);
     if (next) {
       await saveConv(phone, { step: `reg:${next.field}`, data: conv.data });
-      await send(phone, next.q);
+      await send(phone, preguntar(next));
       return conv;
     }
-
-    // Terminó la recolección → guardar participante y pasar a slots
-    return finalizarRegistro(phone, conv, send);
-  }
-
-  // --- ELECCIÓN DE SLOT ---
-  if (conv.step === 'slot') {
-    const cache = conv.slots_cache || {};
-    const opt = cache[text.replace(/\D/g, '')];
-    if (!opt) {
-      await send(phone, '⚠️ Responde con el *número* de la opción que prefieras:');
-      await send(phone, formatSlots(cache));
-      return conv;
-    }
-    return reservarSlot(phone, conv, opt, send);
+    return finalizarRegistro(phone, conv, send); // guarda opcionales y pide factura
   }
 
   // --- ESPERANDO FACTURA ---
   if (conv.step === 'factura') {
-    if (msg.type === 'image' && msg.mediaFileName) {
-      return procesarFactura(phone, conv, msg.mediaFileName, send);
-    }
-    await send(phone, '📸 Por favor envíame la *foto de tu factura* de compra del producto Mobil Delvac (en presentación participante). Debe verse clara y completa.');
+    if (msg.type === 'image' && msg.mediaFileName) return procesarFactura(phone, conv, msg.mediaFileName, send);
+    await send(phone, '📸 Por favor envíame la *foto de tu factura* de compra del producto Mobil Delvac participante. Debe verse clara, completa y legible.');
     return conv;
   }
 
   // --- COMPLETO ---
   if (conv.step === 'completo') {
-    // Permitir reenviar una nueva factura si aún no está aprobado
     if (msg.type === 'image' && msg.mediaFileName) {
       const { data: part } = await supabase.from('gpmd_participants').select('estado').eq('phone', phone).maybeSingle();
-      if (part && part.estado === 'aprobado') {
-        await send(phone, '✅ Tu registro ya está *aprobado*, no necesitas enviar más facturas. 🏁');
+      if (part && part.estado === 'confirmado') {
+        await send(phone, '✅ Tu cupo ya está *confirmado*, no necesitas enviar más facturas. 🏁');
         return conv;
       }
       return procesarFactura(phone, conv, msg.mediaFileName, send);
     }
-    await send(phone, 'Tu registro ya está en proceso. Te notificaremos por aquí para confirmar tu cita. 🏁\n\nSi necesitas ayuda, escribe a un asesor.');
+    await send(phone, 'Tu preregistro ya está en proceso. Te confirmaremos por aquí cuando validemos tu factura. 🏁\n\nSi necesitas ayuda, escribe a un asesor.');
     return conv;
   }
 
   return conv;
 }
 
-async function finalizarRegistro(phone, conv, send) {
-  const d = conv.data;
+// Crea el participante con los datos del piloto (estado pre_registrado).
+async function crearParticipante(phone, d) {
   const codigo = genCodigo();
   const row = {
-    phone, cedula: d.cedula, nombre_piloto: d.nombre_piloto, edad: d.edad || null,
-    tipo_participacion: d.tipo_participacion, participaciones_anteriores: d.participaciones_anteriores || 0,
-    rh: d.rh, eps: d.eps, ciudad: d.ciudad, departamento: d.departamento, email: d.email || null,
-    nombre_copiloto: d.nombre_copiloto || null, vehiculo_marca: d.vehiculo_marca, vehiculo_modelo: d.vehiculo_modelo,
-    vehiculo_cilindrada: d.vehiculo_cilindrada || null, vehiculo_empresa: d.vehiculo_empresa || null,
-    vehiculo_placa: d.vehiculo_placa, codigo_preregistro: codigo, estado: 'slot_pendiente',
+    phone, cedula: d.cedula, nombre_piloto: d.nombre_piloto,
+    tipo_documento_piloto: d.tipo_documento_piloto, novato: !!d.novato,
+    rh: d.rh, email: d.email, codigo_preregistro: codigo, estado: 'pre_registrado',
   };
-  const { error } = await supabase.from('gpmd_participants')
-    .upsert(row, { onConflict: 'phone' }).select('id').single();
-
+  const { error } = await supabase.from('gpmd_participants').upsert(row, { onConflict: 'phone' }).select('id').single();
   if (error) {
-    if (String(error.message || '').includes('cedula')) {
-      await send(phone, '⚠️ Esa cédula ya está registrada con otro número. Si crees que es un error, escribe a un asesor.');
-    } else {
-      await send(phone, '⚠️ Hubo un problema guardando tus datos. Intenta de nuevo en unos minutos.');
-    }
-    console.error('[GPMD] upsert participante:', error.message);
-    return conv;
+    console.error('[GPMD] crearParticipante:', error.message);
+    if (String(error.message).includes('cedula')) return 'Ese documento ya está registrado con otro número. Si crees que es un error, escribe a un asesor.';
+    return 'Hubo un problema guardando tus datos. Intenta de nuevo en unos minutos.';
   }
-
-  // Atributo WATI: registrado=true para todo el que completa las preguntas
-  wati.updateContactAttributes(phone, [{ name: 'registrado', value: 'true' }]).catch(() => {});
-
-  await send(phone, `✅ ¡Datos guardados! Tu código de pre-registro es *${codigo}*.`);
-  return mostrarSlots(phone, conv, send);
+  return null;
 }
 
-async function mostrarSlots(phone, conv, send) {
-  const { data: slots } = await supabase
-    .from('gpmd_slots').select('fecha, franja').is('participant_id', null);
+// Guarda datos opcionales (copiloto/vehículo) y pasa a pedir la factura.
+async function finalizarRegistro(phone, conv, send) {
+  const d = conv.data;
+  await supabase.from('gpmd_participants').update({
+    nombre_copiloto: d.nombre_copiloto || null,
+    tipo_documento_copiloto: d.tipo_documento_copiloto || null,
+    numero_documento_copiloto: d.numero_documento_copiloto || null,
+    rh_copiloto: d.rh_copiloto || null,
+    vehiculo_marca: d.vehiculo_marca || null,
+    vehiculo_placa: d.vehiculo_placa || null,
+  }).eq('phone', phone);
 
-  const conteo = {};
-  for (const s of slots || []) {
-    const k = `${s.fecha}|${s.franja}`;
-    conteo[k] = (conteo[k] || 0) + 1;
-  }
-  const keys = Object.keys(conteo).sort();
-  const cache = {};
-  let i = 1;
-  for (const k of keys) {
-    const [fecha, franja] = k.split('|');
-    cache[i] = { fecha, franja, disponibles: conteo[k] };
-    i++;
-  }
-
-  if (Object.keys(cache).length === 0) {
-    await send(phone, '😕 En este momento no hay turnos disponibles. Te avisaremos apenas se habiliten más.');
-    return conv;
-  }
-
-  await saveConv(phone, { step: 'slot', slots_cache: cache });
-  conv.step = 'slot'; conv.slots_cache = cache;
-  await send(phone, '📅 *Elige tu turno* para la revisión tecno-mecánica:\n\n' + formatSlots(cache) + '\n\nResponde con el *número* de tu opción.');
-  return conv;
-}
-
-function formatSlots(cache) {
-  const horario = { AM: '8:00 a 12:00', PM: '2:00 a 6:00' };
-  return Object.entries(cache)
-    .map(([n, o]) => `${n}️⃣ ${DIA_LABEL[o.fecha] || o.fecha} de julio — ${o.franja} (${horario[o.franja]}) · ${o.disponibles} cupos`)
-    .join('\n');
-}
-
-async function reservarSlot(phone, conv, opt, send) {
-  const { data: part } = await supabase.from('gpmd_participants').select('id').eq('phone', phone).maybeSingle();
-  if (!part) { await send(phone, '⚠️ No encuentro tu registro. Escribe *reiniciar* para empezar.'); return conv; }
-
-  // Buscar un cupo libre y reservarlo (guard contra carrera)
-  const { data: free } = await supabase.from('gpmd_slots')
-    .select('id, hora_inicio, hora_fin').eq('fecha', opt.fecha).eq('franja', opt.franja)
-    .is('participant_id', null).order('numero_slot').limit(1).maybeSingle();
-
-  if (!free) {
-    await send(phone, '😕 Ese horario se acaba de llenar. Elige otra opción:');
-    await send(phone, formatSlots(conv.slots_cache || {}));
-    return conv;
-  }
-
-  const { data: upd } = await supabase.from('gpmd_slots')
-    .update({ participant_id: part.id, reservado_at: new Date().toISOString() })
-    .eq('id', free.id).is('participant_id', null).select('id').maybeSingle();
-
-  if (!upd) {
-    await send(phone, '😕 Ese cupo se tomó justo ahora. Elige otra opción:');
-    await send(phone, formatSlots(conv.slots_cache || {}));
-    return conv;
-  }
-
-  await supabase.from('gpmd_participants').update({ estado: 'factura_pendiente' }).eq('id', part.id);
   await saveConv(phone, { step: 'factura' });
   conv.step = 'factura';
-
-  const hi = (free.hora_inicio || '').slice(0, 5);
-  const hf = (free.hora_fin || '').slice(0, 5);
-  await send(phone, `✅ ¡Turno confirmado! *${DIA_LABEL[opt.fecha] || opt.fecha} de julio*, franja *${opt.franja}* (${hi} a ${hf}).`);
-  await send(phone, '📸 *Último paso:* envíame la *foto de tu factura* de compra del producto Mobil Delvac. Asegúrate de que se vea clara, completa y legible.');
+  await send(phone, '📸 *Último paso:* envíame la *foto de tu factura* de compra del producto Mobil Delvac participante. Asegúrate de que se vea clara, completa y legible.');
   return conv;
 }
 
@@ -332,7 +231,7 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     .select('id, nombre_piloto, codigo_preregistro').eq('phone', phone).maybeSingle();
   if (!part) { await send(phone, '⚠️ No encuentro tu registro. Escribe *reiniciar*.'); return conv; }
 
-  // Etapa 1: descargar la media de WATI (requiere auth)
+  // 1. Descargar media de WATI (requiere auth)
   let buffer, contentType;
   try {
     ({ buffer, contentType } = await wati.downloadMedia(mediaFileName));
@@ -341,75 +240,73 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     await send(phone, '⚠️ No pude descargar tu imagen. Por favor envíala de nuevo.');
     return conv;
   }
-
-  // Etapa 2: subir a Storage (no bloquea el flujo si falla)
+  // 2. Guardar imagen (no bloquea)
   const imagenUrl = await subirImagen(buffer, contentType, part.id);
 
-  // Etapa 3: OCR con Claude
-  let resultado;
+  // 3. OCR + validación (catálogo + PDV)
+  let r;
   try {
-    resultado = await ocr.analizarFactura(buffer, contentType);
+    r = await ocr.analizarFactura(buffer, contentType);
   } catch (e) {
     console.error('[GPMD] OCR Claude falló:', e.message);
-    await send(phone, '📩 Recibí tu factura. Un asesor la revisará y te confirmaremos pronto para confirmar tu cita. ⏳');
-    // Guardar como pendiente de revisión manual aunque el OCR haya fallado
-    await supabase.from('gpmd_facturas').insert({
-      participant_id: part.id, imagen_url: imagenUrl || mediaFileName,
-      ocr_motivo_revision: 'Error técnico en OCR: ' + e.message, estado: 'en_revision',
-    });
-    await supabase.from('gpmd_participants').update({ estado: 'factura_en_revision' }).eq('id', part.id);
-    await saveConv(phone, { step: 'completo' });
-    conv.step = 'completo';
+    await guardarFactura(part.id, { imagen_url: imagenUrl || mediaFileName, ocr_motivo_revision: 'Error técnico OCR: ' + e.message, estado: 'en_revision' });
+    await supabase.from('gpmd_participants').update({ estado: 'en_revision' }).eq('id', part.id);
+    await saveConv(phone, { step: 'completo' }); conv.step = 'completo';
+    await send(phone, '📩 Recibí tu factura. Un asesor la revisará y te confirmaremos pronto para confirmar tu cupo. ⏳');
     return conv;
   }
 
-  const o = resultado.ocr;
-  await supabase.from('gpmd_facturas').insert({
-    participant_id: part.id, imagen_url: imagenUrl || mediaFileName,
-    ocr_raw: o, ocr_establecimiento: o.establecimiento || null, ocr_ciudad: o.ciudad || null,
-    ocr_fecha_compra: o.fecha_compra || null, ocr_referencia_producto: o.referencia_producto || null,
-    ocr_presentacion: o.presentacion || null, ocr_cantidad: o.cantidad || null,
-    ocr_valor_total: o.valor_total || null, ocr_confianza: resultado.confianza,
-    ocr_motivo_revision: resultado.motivo,
-    establecimiento: resultado.pasaAuto ? o.establecimiento || null : null,
-    ciudad: resultado.pasaAuto ? o.ciudad || null : null,
-    fecha_compra: resultado.pasaAuto ? o.fecha_compra || null : null,
-    referencia_producto: resultado.pasaAuto ? o.referencia_producto || null : null,
-    presentacion: resultado.pasaAuto ? o.presentacion || null : null,
-    cantidad: resultado.pasaAuto ? o.cantidad || null : null,
-    valor_total: resultado.pasaAuto ? o.valor_total || null : null,
-    estado: resultado.estado,
+  const o = r.ocr;
+  await guardarFactura(part.id, {
+    imagen_url: imagenUrl || mediaFileName, ocr_raw: o,
+    ocr_establecimiento: o.establecimiento || null, ocr_fecha_compra: o.fecha_compra || null,
+    ocr_referencia_producto: o.producto_factura || null, ocr_presentacion: o.presentacion || null,
+    ocr_cantidad: o.cantidad || null, ocr_valor_total: o.valor_total || null,
+    ocr_confianza: r.confianza, ocr_motivo_revision: r.motivo,
+    nit: o.nit || null, cliente: r.pdv.cliente, agente: r.pdv.agente,
+    departamento: r.pdv.departamento, ciudad_pdv: r.pdv.ciudad,
+    producto_catalogo: o.producto_catalogo || null, match_confianza: r.matchConfianza,
+    establecimiento: r.pasaAuto ? o.establecimiento || null : null,
+    fecha_compra: r.pasaAuto ? o.fecha_compra || null : null,
+    referencia_producto: r.pasaAuto ? o.producto_catalogo || null : null,
+    presentacion: r.pasaAuto ? o.presentacion || null : null,
+    cantidad: r.pasaAuto ? o.cantidad || null : null,
+    valor_total: r.pasaAuto ? o.valor_total || null : null,
+    estado: r.estado,
   });
 
-  await supabase.from('gpmd_participants')
-    .update({ estado: resultado.pasaAuto ? 'aprobado' : 'factura_en_revision' }).eq('id', part.id);
-  await saveConv(phone, { step: 'completo' });
-  conv.step = 'completo';
+  await saveConv(phone, { step: 'completo' }); conv.step = 'completo';
 
-  if (resultado.pasaAuto) {
-    // Atributos WATI: agendado=true + fecha_agenda (factura validada + slot reservado)
-    const { data: slot } = await supabase.from('gpmd_slots')
-      .select('fecha, franja').eq('participant_id', part.id).maybeSingle();
-    const fechaAgenda = slot ? etiquetaFecha(slot.fecha, slot.franja) : '';
-    wati.updateContactAttributes(phone, [
-      { name: 'agendado', value: 'true' },
-      { name: 'fecha_agenda', value: fechaAgenda },
-    ]).catch(() => {});
-
-    await send(phone, `✅ *¡Felicitaciones, ${(part.nombre_piloto || '').split(' ')[0] || 'piloto'}!*\n\nTu factura fue verificada y tu registro en el *Gran Premio Mobil Delvac 2026* está *COMPLETO*. 🏁\n\n🏁 Código: *${part.codigo_preregistro}*\n📅 Tu cita: *${fechaAgenda}*\n\nRecuerda presentarte en tu horario con los documentos originales. ¡Mucha suerte! 🚛💨`);
-  } else {
-    await send(phone, '⏳ Recibimos tu factura y la estamos *revisando*. Te confirmaremos por este medio una vez sea verificada, para confirmar tu cita. Esto puede tomar hasta 24 horas. ¡Gracias por tu paciencia!');
+  if (!r.pasaAuto) {
+    await supabase.from('gpmd_participants').update({ estado: 'en_revision' }).eq('id', part.id);
+    await send(phone, '📩 Recibí tu factura. Un asesor la revisará y te confirmaremos pronto para confirmar tu cupo. ⏳');
+    return conv;
   }
+
+  // Pasa OCR → revisar cupo de confirmados
+  const { count } = await supabase.from('gpmd_participants').select('*', { count: 'exact', head: true }).eq('estado', 'confirmado');
+  if ((count || 0) >= LIMITE_CONFIRMADOS()) {
+    await supabase.from('gpmd_participants').update({ estado: 'lista_espera' }).eq('id', part.id);
+    await send(phone, '✅ ¡Tu factura es válida! Sin embargo los cupos ya se completaron, así que quedas en *lista de espera*. Te avisaremos si se habilita un cupo. 🙏');
+    return conv;
+  }
+
+  await supabase.from('gpmd_participants').update({ estado: 'confirmado' }).eq('id', part.id);
+  wati.updateContactAttributes(phone, [{ name: 'confirmado', value: 'true' }]).catch(() => {});
+  await send(phone, `✅ *¡Felicitaciones, ${(part.nombre_piloto || '').split(' ')[0] || 'piloto'}!*\n\nTu factura fue verificada y tu cupo en el *Gran Premio Mobil Delvac 2026* está *CONFIRMADO*. 🏁\n\n🏁 Código: *${part.codigo_preregistro}*\n\n¡Nos vemos en la pista! 🚛💨`);
   return conv;
+}
+
+async function guardarFactura(participantId, campos) {
+  await supabase.from('gpmd_facturas').insert({ participant_id: participantId, ...campos });
 }
 
 async function subirImagen(buffer, contentType, participantId) {
   const ext = contentType.includes('png') ? 'png' : 'jpg';
-  const path = `${participantId}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('facturas').upload(path, buffer, { contentType, upsert: true });
+  const p = `${participantId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('facturas').upload(p, buffer, { contentType, upsert: true });
   if (error) { console.warn('[GPMD] storage upload:', error.message); return null; }
-  const { data } = supabase.storage.from('facturas').getPublicUrl(path);
-  return data?.publicUrl || null;
+  return supabase.storage.from('facturas').getPublicUrl(p).data?.publicUrl || null;
 }
 
-module.exports = { processIncoming, STEPS, etiquetaFecha };
+module.exports = { processIncoming, STEPS };

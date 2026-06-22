@@ -41,31 +41,31 @@ function renderSidebar(activeKey) {
   if (!user) return;
 
   const nav = [
-    { key: 'agenda',    href: 'agenda.html',    icon: '📅', label: 'Agenda', roles: ['admin','cliente'] },
-    { key: 'aprobador', href: 'aprobador.html',  icon: '✅', label: 'Aprobador', roles: ['admin','agente'] },
-    { key: 'dashboard', href: 'dashboard.html',  icon: '📊', label: 'Dashboard', roles: ['admin','cliente'] },
-    { key: 'log',       href: 'log.html',        icon: '📋', label: 'Log', roles: ['admin'] },
-    { key: 'usuarios',  href: 'usuarios.html',   icon: '👥', label: 'Usuarios', roles: ['admin'] },
+    { key: 'preregistrados', href: 'preregistrados.html', icon: '📋', label: 'Preregistrados', roles: ['admin','cliente','agente'] },
+    { key: 'aprobador',      href: 'aprobador.html',      icon: '✅', label: 'Aprobador', roles: ['admin','agente'] },
+    { key: 'buscar',         href: 'buscar.html',         icon: '🔎', label: 'Buscar', roles: ['admin','cliente','agente'] },
+    { key: 'dashboard',      href: 'dashboard.html',      icon: '📊', label: 'Dashboard', roles: ['admin','cliente'] },
+    { key: 'pdv',            href: 'pdv.html',            icon: '🏪', label: 'PDV y Productos', roles: ['admin'] },
+    { key: 'log',            href: 'log.html',            icon: '🗒️', label: 'Log', roles: ['admin'] },
+    { key: 'usuarios',       href: 'usuarios.html',       icon: '👥', label: 'Usuarios', roles: ['admin'] },
   ].filter(n => n.roles.includes(user.rol));
 
   const links = nav.map(n =>
     `<a href="${n.href}" class="${n.key === activeKey ? 'active' : ''}">
-      <span class="icon">${n.icon}</span> ${n.label}
+      <span class="icon">${n.icon}</span> <span>${n.label}</span>
     </a>`
   ).join('');
 
   document.getElementById('sidebar').innerHTML = `
-    <div class="sidebar-logo">
+    <div class="sidebar-brand">
+      <div class="wordmark"><span class="dot"></span> <span>Smart Assistance</span></div>
       <img src="assets/img/Logo_MobilDelvac_v2.png" alt="Mobil Delvac" class="logo-mobil"/>
-      <img src="assets/img/logo-nodo-white.png" alt="NODO" class="logo-nodo"/>
     </div>
     <nav class="sidebar-nav">${links}</nav>
     <div class="sidebar-footer">
-      <div class="user-name">${user.nombre}</div>
-      <div>${user.rol}</div>
-      <button onclick="logout()" style="margin-top:.5rem;background:none;border:none;color:#888;cursor:pointer;font-size:.8rem;">
-        ← Salir
-      </button>
+      <div class="user-name">${user.nombre || ''}</div>
+      <div class="user-rol">${user.rol}</div>
+      <button onclick="logout()">← Salir</button>
     </div>
   `;
 }

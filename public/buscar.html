@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <base href="/gpmd-chatbot/"/>
+  <title>Buscar — GPMD 2026</title>
+  <link rel="icon" href="assets/img/favicon.png"/>
+  <link rel="stylesheet" href="assets/css/main.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="page-header"><div><h1>Buscar participante</h1><p>Por cédula, nombre, placa o código</p></div></div>
+
+    <div class="search-bar">
+      <input class="form-control" id="q" placeholder="Escribe una cédula, nombre, placa o código…" autocomplete="off"/>
+      <button class="btn btn-primary" onclick="buscar()">Buscar</button>
+    </div>
+
+    <div id="resultados"></div>
+  </main>
+</div>
+
+<script src="assets/js/auth.js"></script>
+<script>
+const LABEL = { pre_registrado:'Pre Registrado', en_revision:'En Revisión', confirmado:'Confirmado', rechazado:'Rechazado', lista_espera:'Lista de espera' };
+let timer;
+
+async function init(){ requireRole(['admin','cliente','agente']); renderSidebar('buscar');
+  document.getElementById('q').addEventListener('input', ()=>{ clearTimeout(timer); timer=setTimeout(buscar,350); });
+  document.getElementById('q').focus();
+}
+
+async function buscar(){
+  const q = document.getElementById('q').value.trim();
+  const cont = document.getElementById('resultados');
+  if(q.length<2){ cont.innerHTML=''; return; }
+  const res = await apiFetch(`api/buscar?q=${encodeURIComponent(q)}`); if(!res) return;
+  const data = await res.json();
+  if(!data.length){ cont.innerHTML='<div class="card card-pad empty"><div class="big">🔍</div>Sin resultados para “'+q+'”</div>'; return; }
+  cont.innerHTML = data.map(ficha).join('');
+}
+
+function ficha(p){
+  const f = p.factura;
+  const facturaBlock = p.tiene_factura
+    ? `<div class="card-title" style="margin-top:1rem;">Factura</div>
+       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem 1rem;font-size:.86rem;">
+         ${campo('Estado factura', `<span class="badge badge-${facBadge(f.estado)}">${f.estado}</span>`)}
+         ${campo('Cliente / PDV', f.cliente)} ${campo('NIT', f.nit)}
+         ${campo('Producto', f.referencia_producto)} ${campo('Presentación', f.presentacion)}
+         ${campo('Valor', f.valor_total?('$'+Number(f.valor_total).toLocaleString('es-CO')):'—')}
+         ${f.ocr_motivo_revision?campo('Motivo revisión', f.ocr_motivo_revision):''}
+       </div>
+       ${f.imagen_url?`<a class="btn btn-secondary btn-sm" style="margin-top:.7rem" href="${f.imagen_url}" target="_blank">Ver factura ↗</a>`:''}`
+    : `<div class="pdv-info" style="margin-top:1rem;background:var(--amber-bg);border-color:transparent;color:#b45309;">📭 Este participante aún no ha enviado factura.</div>`;
+  return `<div class="card card-pad" style="margin-bottom:1rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <div><div style="font-size:1.15rem;font-weight:800;">${p.nombre_piloto||'—'}</div>
+      <div class="muted" style="font-size:.85rem">${p.tipo_documento_piloto||''} ${p.cedula||''} · ${p.phone||''}</div></div>
+      <span class="badge badge-${p.estado}">${LABEL[p.estado]||p.estado}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.4rem 1rem;font-size:.86rem;margin-top:.8rem;">
+      ${campo('Código', p.codigo_preregistro)} ${campo('Novato', p.novato?'Sí':'No')} ${campo('RH', p.rh)}
+      ${campo('Email', p.email)} ${campo('Copiloto', p.nombre_copiloto)} ${campo('Placa', p.vehiculo_placa)}
+    </div>
+    ${facturaBlock}
+  </div>`;
+}
+const campo = (l,v)=>`<div><div class="kpi-label" style="font-size:.66rem">${l}</div><div>${v||'—'}</div></div>`;
+function facBadge(e){ return e==='aprobada_auto'||e==='aprobada_manual'?'verde':e==='rechazada'?'rojo':'amarillo'; }
+
+init();
+</script>
+</body>
+</html>

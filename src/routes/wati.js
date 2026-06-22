@@ -31,9 +31,7 @@ router.post('/', async (req, res) => {
     // Para imágenes WATI manda la ruta del archivo en `data`
     const mediaFileName = type === 'image' ? (b.data || b.fileName || '') : '';
 
-    console.log(`[WATI in] ${phone} type=${type} text="${(text || '').slice(0, 40)}"${mediaFileName ? ' media=' + mediaFileName : ''}`);
-    // Diagnóstico temporal: ver estructura cruda de mensajes con media
-    if (type !== 'text') console.log('[WATI raw media msg]', JSON.stringify(b).slice(0, 600));
+    console.log(`[WATI in] ${phone} type=${type} text="${(text || '').slice(0, 40)}"`);
     await processIncoming({ phone, text, type, mediaFileName, senderName: b.senderName });
   } catch (e) {
     console.error('[WATI webhook] error:', e.message);

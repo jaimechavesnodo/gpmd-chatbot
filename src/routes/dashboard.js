@@ -3,68 +3,41 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { requireAuth } = require('../middleware/auth');
 
+const LIMITE = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150;
+
 router.get('/', requireAuth(['admin', 'cliente']), async (req, res) => {
-  const [
-    { count: total_participantes },
-    { count: aprobados },
-    { count: rechazados },
-    { count: en_revision },
-    { data: facturas_estado },
-    { data: slots_info },
-    { data: referencias },
-    { data: rechazos_causas },
-  ] = await Promise.all([
-    supabase.from('gpmd_participants').select('*', { count: 'exact', head: true }),
-    supabase.from('gpmd_participants').select('*', { count: 'exact', head: true }).eq('estado', 'aprobado'),
-    supabase.from('gpmd_participants').select('*', { count: 'exact', head: true }).eq('estado', 'rechazado'),
-    supabase.from('gpmd_facturas').select('*', { count: 'exact', head: true }).eq('estado', 'en_revision'),
-    supabase.from('gpmd_facturas').select('estado').neq('estado', null),
-    supabase.from('gpmd_slots').select('fecha, franja, participant_id'),
-    supabase.from('gpmd_facturas').select('referencia_producto').not('referencia_producto', 'is', null),
+  const estados = ['pre_registrado', 'en_revision', 'confirmado', 'rechazado', 'lista_espera'];
+  const [participantes, { data: facturas_estado }, { data: clientes }, { data: rechazos }] = await Promise.all([
+    Promise.all(estados.map((e) => supabase.from('gpmd_participants').select('*', { count: 'exact', head: true }).eq('estado', e))),
+    supabase.from('gpmd_facturas').select('estado'),
+    supabase.from('gpmd_facturas').select('cliente').not('cliente', 'is', null),
     supabase.from('gpmd_facturas').select('razon_rechazo').eq('estado', 'rechazada').not('razon_rechazo', 'is', null),
   ]);
 
-  // Conteos de facturas por estado
+  const porEstado = {};
+  estados.forEach((e, i) => { porEstado[e] = participantes[i].count || 0; });
+
   const conteo_facturas = {};
-  (facturas_estado || []).forEach(f => {
-    conteo_facturas[f.estado] = (conteo_facturas[f.estado] || 0) + 1;
-  });
+  (facturas_estado || []).forEach((f) => { conteo_facturas[f.estado] = (conteo_facturas[f.estado] || 0) + 1; });
 
-  // Slots: disponibles vs agendados por día/franja
-  const agenda = {};
-  (slots_info || []).forEach(s => {
-    const key = `${s.fecha}_${s.franja}`;
-    if (!agenda[key]) agenda[key] = { fecha: s.fecha, franja: s.franja, total: 0, agendados: 0 };
-    agenda[key].total++;
-    if (s.participant_id) agenda[key].agendados++;
-  });
+  const porCliente = {};
+  (clientes || []).forEach((f) => { if (f.cliente) porCliente[f.cliente] = (porCliente[f.cliente] || 0) + 1; });
 
-  // Frecuencia de referencias
-  const refs = {};
-  (referencias || []).forEach(f => {
-    if (f.referencia_producto) refs[f.referencia_producto] = (refs[f.referencia_producto] || 0) + 1;
-  });
-
-  // Causas de rechazo
   const causas = {};
-  (rechazos_causas || []).forEach(f => {
-    if (f.razon_rechazo) causas[f.razon_rechazo] = (causas[f.razon_rechazo] || 0) + 1;
-  });
+  (rechazos || []).forEach((f) => { if (f.razon_rechazo) causas[f.razon_rechazo] = (causas[f.razon_rechazo] || 0) + 1; });
 
+  const total = Object.values(porEstado).reduce((a, b) => a + b, 0);
   res.json({
-    total_participantes,
-    aprobados,
-    rechazados,
-    en_revision,
+    total_participantes: total,
+    por_estado: porEstado,
+    cupo: { confirmados: porEstado.confirmado, limite: LIMITE(), disponibles: Math.max(0, LIMITE() - porEstado.confirmado) },
     facturas: {
-      pendiente: conteo_facturas.pendiente || 0,
       aprobada_auto: conteo_facturas.aprobada_auto || 0,
       aprobada_manual: conteo_facturas.aprobada_manual || 0,
       en_revision: conteo_facturas.en_revision || 0,
       rechazada: conteo_facturas.rechazada || 0,
     },
-    agenda: Object.values(agenda).sort((a, b) => a.fecha > b.fecha ? 1 : -1),
-    referencias: Object.entries(refs).map(([ref, n]) => ({ ref, n })).sort((a, b) => b.n - a.n),
+    por_cliente: Object.entries(porCliente).map(([cliente, n]) => ({ cliente, n })).sort((a, b) => b.n - a.n).slice(0, 15),
     causas_rechazo: Object.entries(causas).map(([causa, n]) => ({ causa, n })).sort((a, b) => b.n - a.n),
   });
 });

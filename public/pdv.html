@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <base href="/gpmd-chatbot/"/>
+  <title>PDV y Productos — GPMD 2026</title>
+  <link rel="icon" href="assets/img/favicon.png"/>
+  <link rel="stylesheet" href="assets/css/main.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="page-header"><div><h1>PDV y Productos</h1><p>Establecimientos y catálogo participantes</p></div></div>
+
+    <div class="filtros">
+      <div class="chip active" id="tab-pdv" onclick="tab('pdv')">🏪 PDV (establecimientos)</div>
+      <div class="chip" id="tab-prod" onclick="tab('prod')">📦 Productos</div>
+    </div>
+
+    <!-- PDV -->
+    <div id="panel-pdv">
+      <div class="card card-pad" style="margin-bottom:1rem;">
+        <div class="card-title">Agregar PDV</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr) auto;gap:.5rem;align-items:end;">
+          <div class="form-group" style="margin:0"><label class="form-label">NIT</label><input class="form-control" id="p_nit"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Cliente *</label><input class="form-control" id="p_cliente"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Agente</label><input class="form-control" id="p_agente"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Departamento</label><input class="form-control" id="p_dep"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Ciudad</label><input class="form-control" id="p_ciudad"/></div>
+          <button class="btn btn-primary" onclick="addPdv()">Agregar</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <div class="table-header"><h2>PDV <span class="badge badge-gris" id="pdvCount"></span></h2>
+          <input class="form-control" style="max-width:240px" id="pdvFiltro" placeholder="Filtrar por NIT/cliente…" oninput="renderPdv()"/></div>
+        <div style="overflow-x:auto;max-height:60vh;overflow-y:auto;"><table>
+          <thead><tr><th>NIT</th><th>Cliente</th><th>Agente</th><th>Depto</th><th>Ciudad</th><th></th></tr></thead>
+          <tbody id="pdvBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- Productos -->
+    <div id="panel-prod" style="display:none;">
+      <div class="card card-pad" style="margin-bottom:1rem;">
+        <div class="card-title">Agregar producto</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr auto auto;gap:.5rem;align-items:end;">
+          <div class="form-group" style="margin:0"><label class="form-label">Producto *</label><input class="form-control" id="pr_producto"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Presentación</label><input class="form-control" id="pr_presentacion"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">¿Participa?</label>
+            <select class="form-control" id="pr_participa"><option value="true">Sí</option><option value="false">No</option></select></div>
+          <button class="btn btn-primary" onclick="addProd()">Agregar</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <div class="table-header"><h2>Productos <span class="badge badge-gris" id="prodCount"></span></h2></div>
+        <div style="overflow-x:auto;max-height:60vh;overflow-y:auto;"><table>
+          <thead><tr><th>Producto</th><th>Presentación</th><th>Participa</th><th></th></tr></thead>
+          <tbody id="prodBody"></tbody></table></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="assets/js/auth.js"></script>
+<script>
+let pdv=[], prod=[];
+async function init(){ requireRole(['admin']); renderSidebar('pdv'); await Promise.all([loadPdv(),loadProd()]); }
+
+function tab(t){
+  document.getElementById('tab-pdv').classList.toggle('active', t==='pdv');
+  document.getElementById('tab-prod').classList.toggle('active', t==='prod');
+  document.getElementById('panel-pdv').style.display = t==='pdv'?'block':'none';
+  document.getElementById('panel-prod').style.display = t==='prod'?'block':'none';
+}
+
+async function loadPdv(){ const r=await apiFetch('api/pdv'); pdv = r?await r.json():[]; renderPdv(); }
+function renderPdv(){
+  const f=(document.getElementById('pdvFiltro').value||'').toLowerCase();
+  const rows = pdv.filter(p=>!f || (p.cliente||'').toLowerCase().includes(f) || (p.nit||'').includes(f));
+  document.getElementById('pdvCount').textContent = rows.length;
+  document.getElementById('pdvBody').innerHTML = rows.map(p=>`<tr>
+    <td>${p.nit||'—'}</td><td><strong>${p.cliente}</strong></td><td>${p.agente||'—'}</td>
+    <td>${p.departamento||'—'}</td><td>${p.ciudad||'—'}</td>
+    <td><button class="btn btn-secondary btn-sm" onclick="delPdv(${p.id})">Eliminar</button></td></tr>`).join('');
+}
+async function addPdv(){
+  const body={ nit:v('p_nit'), cliente:v('p_cliente'), agente:v('p_agente'), departamento:v('p_dep'), ciudad:v('p_ciudad') };
+  if(!body.cliente){ showToast('Cliente requerido','error'); return; }
+  const r=await apiFetch('api/pdv',{method:'POST',body:JSON.stringify(body)});
+  if(r&&r.ok){ showToast('PDV agregado','ok'); ['p_nit','p_cliente','p_agente','p_dep','p_ciudad'].forEach(i=>document.getElementById(i).value=''); loadPdv(); }
+  else showToast('No se pudo agregar','error');
+}
+async function delPdv(id){ const r=await apiFetch(`api/pdv/${id}`,{method:'DELETE'}); if(r&&r.ok){ showToast('Eliminado','ok'); loadPdv(); } }
+
+async function loadProd(){ const r=await apiFetch('api/productos'); prod = r?await r.json():[]; renderProd(); }
+function renderProd(){
+  document.getElementById('prodCount').textContent = prod.length;
+  document.getElementById('prodBody').innerHTML = prod.map(p=>`<tr>
+    <td><strong>${p.producto}</strong></td><td>${p.presentacion||'—'}</td>
+    <td><span class="badge badge-${p.participa?'verde':'gris'}">${p.participa?'Sí':'No'}</span></td>
+    <td><button class="btn btn-secondary btn-sm" onclick="delProd(${p.id})">Eliminar</button></td></tr>`).join('');
+}
+async function addProd(){
+  const body={ producto:v('pr_producto'), presentacion:v('pr_presentacion'), participa:v('pr_participa')==='true' };
+  if(!body.producto){ showToast('Producto requerido','error'); return; }
+  const r=await apiFetch('api/productos',{method:'POST',body:JSON.stringify(body)});
+  if(r&&r.ok){ showToast('Producto agregado','ok'); document.getElementById('pr_producto').value=''; document.getElementById('pr_presentacion').value=''; loadProd(); }
+  else showToast('No se pudo agregar','error');
+}
+async function delProd(id){ const r=await apiFetch(`api/productos/${id}`,{method:'DELETE'}); if(r&&r.ok){ showToast('Eliminado','ok'); loadProd(); } }
+
+const v = id => document.getElementById(id)?.value.trim() || '';
+init();
+</script>
+</body>
+</html>

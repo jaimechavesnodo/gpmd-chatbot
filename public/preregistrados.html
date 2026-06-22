@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <base href="/gpmd-chatbot/"/>
+  <title>Preregistrados — GPMD 2026</title>
+  <link rel="icon" href="assets/img/favicon.png"/>
+  <link rel="stylesheet" href="assets/css/main.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1>Preregistrados</h1>
+        <p>Participantes del Gran Premio Mobil Delvac 2026</p>
+      </div>
+      <div class="card card-pad" style="text-align:center;min-width:170px;">
+        <div class="kpi-label">Cupos confirmados</div>
+        <div class="kpi-value gradient-text" id="cupoVal">0/150</div>
+      </div>
+    </div>
+
+    <div class="filtros" id="filtros"></div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2>Listado <span class="badge badge-gris" id="countBadge" style="margin-left:.4rem;"></span></h2>
+        <button class="btn btn-secondary btn-sm" onclick="cargar()">↻ Actualizar</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr>
+            <th>Piloto</th><th>Documento</th><th>Tipo</th><th>Estado</th><th>Factura</th><th>Código</th><th>Registro</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div id="empty" class="empty" style="display:none;"><div class="big">📭</div>Sin participantes en este filtro</div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal detalle -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarModal()">✕</button>
+    <h2 id="mTitulo">Participante</h2>
+    <div id="mBody"></div>
+  </div>
+</div>
+
+<script src="assets/js/auth.js"></script>
+<script>
+let data = [], filtro = '';
+const ESTADOS = [
+  { v:'', l:'Todos' }, { v:'pre_registrado', l:'Pre Registrado' }, { v:'en_revision', l:'En Revisión' },
+  { v:'confirmado', l:'Confirmado' }, { v:'lista_espera', l:'Lista de espera' }, { v:'rechazado', l:'Rechazado' },
+];
+const LABEL = { pre_registrado:'Pre Registrado', en_revision:'En Revisión', confirmado:'Confirmado', rechazado:'Rechazado', lista_espera:'Lista de espera' };
+
+async function init(){ requireRole(['admin','cliente','agente']); renderSidebar('preregistrados'); renderFiltros(); await cargar(); }
+
+function renderFiltros(){
+  document.getElementById('filtros').innerHTML = ESTADOS.map(e =>
+    `<div class="chip ${e.v===filtro?'active':''}" onclick="setFiltro('${e.v}')">${e.l}</div>`).join('');
+}
+function setFiltro(v){ filtro=v; renderFiltros(); cargar(); }
+
+async function cargar(){
+  const res = await apiFetch('api/participantes' + (filtro?`?estado=${filtro}`:''));
+  if(!res) return;
+  const j = await res.json();
+  data = j.participantes;
+  document.getElementById('cupoVal').textContent = `${j.confirmados}/${j.limite}`;
+  document.getElementById('countBadge').textContent = data.length;
+  render();
+}
+
+function render(){
+  const tb = document.getElementById('tbody');
+  document.getElementById('empty').style.display = data.length ? 'none' : 'block';
+  tb.innerHTML = data.map(p => `
+    <tr style="cursor:pointer" onclick="ver('${p.id}')">
+      <td><strong>${p.nombre_piloto||'—'}</strong></td>
+      <td>${p.tipo_documento_piloto?p.tipo_documento_piloto[0]:''} ${p.cedula||''}</td>
+      <td>${p.novato?'Novato':'No novato'}</td>
+      <td><span class="badge badge-${p.estado}">${LABEL[p.estado]||p.estado}</span></td>
+      <td>${p.factura?`<span class="badge badge-${facBadge(p.factura.estado)}">${p.factura.estado}</span>`:'<span class="muted">sin factura</span>'}</td>
+      <td>${p.codigo_preregistro||'—'}</td>
+      <td class="muted">${new Date(p.created_at).toLocaleDateString('es-CO')}</td>
+    </tr>`).join('');
+}
+function facBadge(e){ return e==='aprobada_auto'||e==='aprobada_manual'?'verde':e==='rechazada'?'rojo':'amarillo'; }
+
+function ver(id){
+  const p = data.find(x=>x.id===id); if(!p) return;
+  document.getElementById('mTitulo').textContent = p.nombre_piloto || 'Participante';
+  const f = p.factura;
+  document.getElementById('mBody').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem 1rem;font-size:.86rem;margin-bottom:1rem;">
+      ${campo('Estado', `<span class="badge badge-${p.estado}">${LABEL[p.estado]||p.estado}</span>`)}
+      ${campo('Código', p.codigo_preregistro)}
+      ${campo('Documento', `${p.tipo_documento_piloto||''} ${p.cedula||''}`)}
+      ${campo('Novato', p.novato?'Sí':'No')}
+      ${campo('RH', p.rh)} ${campo('Email', p.email)}
+      ${campo('Celular', p.phone)}
+    </div>
+    <div class="card-title">Copiloto y vehículo (editable)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
+      ${input('e_nombre_copiloto','Nombre copiloto',p.nombre_copiloto)}
+      ${input('e_numero_documento_copiloto','Doc. copiloto',p.numero_documento_copiloto)}
+      ${input('e_vehiculo_marca','Vehículo (marca/modelo)',p.vehiculo_marca)}
+      ${input('e_vehiculo_placa','Placa',p.vehiculo_placa)}
+    </div>
+    <div style="display:flex;gap:.6rem;margin-top:1rem;align-items:center;">
+      <button class="btn btn-primary btn-sm" onclick="guardarEdit('${p.id}')">Guardar cambios</button>
+      ${f&&f.imagen_url?`<a class="btn btn-secondary btn-sm" href="${f.imagen_url}" target="_blank">Ver factura ↗</a>`:''}
+    </div>`;
+  document.getElementById('modal').classList.add('show');
+}
+const campo = (l,v)=>`<div><div class="kpi-label" style="font-size:.68rem">${l}</div><div>${v||'—'}</div></div>`;
+const input = (id,l,v)=>`<div class="form-group" style="margin:0"><label class="form-label">${l}</label><input class="form-control" id="${id}" value="${v||''}"/></div>`;
+function cerrarModal(){ document.getElementById('modal').classList.remove('show'); }
+
+async function guardarEdit(id){
+  const body = {
+    nombre_copiloto: val('e_nombre_copiloto'), numero_documento_copiloto: val('e_numero_documento_copiloto'),
+    vehiculo_marca: val('e_vehiculo_marca'), vehiculo_placa: val('e_vehiculo_placa'),
+  };
+  const res = await apiFetch(`api/participantes/${id}`, { method:'PATCH', body: JSON.stringify(body) });
+  if(res&&res.ok){ showToast('Datos actualizados','ok'); cerrarModal(); cargar(); }
+  else showToast('No se pudo guardar','error');
+}
+const val = id => document.getElementById(id)?.value || '';
+
+init();
+</script>
+</body>
+</html>
