@@ -5,17 +5,17 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
--- 0. Limpieza de datos de prueba (cambia el modelo de estados)
+-- 0. Eliminar agendamiento por slots PRIMERO (tiene FK a participants)
+-- ------------------------------------------------------------
+DROP VIEW IF EXISTS gpmd_slots_disponibles;
+DROP TABLE IF EXISTS gpmd_slots;
+
+-- ------------------------------------------------------------
+-- 1. Limpieza de datos de prueba (cambia el modelo de estados)
 -- ------------------------------------------------------------
 DELETE FROM gpmd_facturas;
 DELETE FROM gpmd_conversaciones;
 DELETE FROM gpmd_participants;
-
--- ------------------------------------------------------------
--- 1. Eliminar el sistema de agendamiento por slots
--- ------------------------------------------------------------
-DROP VIEW IF EXISTS gpmd_slots_disponibles;
-DROP TABLE IF EXISTS gpmd_slots;
 
 -- ------------------------------------------------------------
 -- 2. Participantes: nuevos campos y estados
