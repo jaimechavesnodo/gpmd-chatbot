@@ -28,7 +28,7 @@ router.get('/pendientes', requireAuth(['admin', 'agente']), async (req, res) => 
   const { data, error } = await supabase
     .from('gpmd_facturas')
     .select(`
-      id, imagen_url, estado, created_at, nit, cliente, agente, departamento, ciudad_pdv,
+      id, imagen_url, estado, created_at, nit, cliente, agente, departamento, ciudad_pdv, canal, razon_social,
       ocr_establecimiento, ocr_fecha_compra, ocr_referencia_producto, producto_catalogo,
       ocr_presentacion, ocr_cantidad, ocr_valor_total, ocr_confianza, match_confianza, ocr_motivo_revision,
       participant:participant_id ( id, nombre_piloto, cedula, phone, codigo_preregistro )
@@ -58,6 +58,7 @@ router.patch('/:id/aprobar', requireAuth(['admin', 'agente']), async (req, res) 
   const { data, error } = await supabase.from('gpmd_facturas').update({
     estado: 'aprobada_manual',
     cliente: pdv.cliente, agente: pdv.agente, departamento: pdv.departamento, ciudad_pdv: pdv.ciudad,
+    canal: pdv.canal, razon_social: pdv.razon_social,
     establecimiento: pdv.cliente, nit: pdv.nit,
     referencia_producto: referencia_producto || null, presentacion: presentacion || null,
     cantidad: cantidad || null, valor_total: valor_total || null, fecha_compra: fecha_compra || null,

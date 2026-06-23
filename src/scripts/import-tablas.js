@@ -47,12 +47,25 @@ async function importPdv() {
       agente: clean(r['Agente']) || null,
       departamento: clean(r['Departamento']) || null,
       ciudad: clean(r['Ciudad']) || null,
+      canal: clean(r['Canal']) || null,
+      razon_social: clean(r['Razon Social'] || r['Razón Social']) || null,
     });
   }
-  const { error } = await supabase.from('gpmd_pdv').upsert(out, { onConflict: 'nit,cliente' });
+  // Deduplicar por (nit, cliente) — el archivo puede traer filas repetidas
+  const vistos = new Set();
+  const dedup = out.filter((p) => {
+    const k = `${p.nit || ''}|${p.cliente}`;
+    if (vistos.has(k)) return false;
+    vistos.add(k); return true;
+  });
+  const dups = out.length - dedup.length;
+
+  // Reemplazo total: estos son los PDV finales del proyecto.
+  await supabase.from('gpmd_pdv').delete().neq('id', 0);
+  const { error } = await supabase.from('gpmd_pdv').insert(dedup);
   if (error) throw new Error('pdv: ' + error.message);
-  const nits = new Set(out.map((p) => p.nit).filter(Boolean));
-  console.log(`✓ pdv: ${out.length} clientes en ${nits.size} NITs`);
+  const nits = new Set(dedup.map((p) => p.nit).filter(Boolean));
+  console.log(`✓ pdv: ${dedup.length} clientes en ${nits.size} NITs (reemplazo total${dups ? `, ${dups} duplicado(s) omitido(s)` : ''})`);
 }
 
 (async () => {

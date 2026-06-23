@@ -265,6 +265,7 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     ocr_confianza: r.confianza, ocr_motivo_revision: r.motivo,
     nit: o.nit || null, cliente: r.pdv.cliente, agente: r.pdv.agente,
     departamento: r.pdv.departamento, ciudad_pdv: r.pdv.ciudad,
+    canal: r.pdv.canal, razon_social: r.pdv.razon_social,
     producto_catalogo: o.producto_catalogo || null, match_confianza: r.matchConfianza,
     establecimiento: r.pasaAuto ? o.establecimiento || null : null,
     fecha_compra: r.pasaAuto ? o.fecha_compra || null : null,
