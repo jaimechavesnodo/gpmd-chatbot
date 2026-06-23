@@ -103,7 +103,8 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
 
   const conv = await loadConv(phone);
 
-  if (/^(reiniciar|empezar de nuevo|reset)$/i.test(text)) {
+  const forzarReinicio = /^(reiniciar|empezar de nuevo|reset)$/i.test(text);
+  if (forzarReinicio) {
     await saveConv(phone, { step: 'inicio', data: {} });
     conv.step = 'inicio'; conv.data = {};
   }
@@ -114,9 +115,9 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
       .from('gpmd_participants').select('estado, codigo_preregistro, nombre_piloto')
       .eq('phone', phone).maybeSingle();
 
-    if (part && part.estado === 'confirmado') {
-      await send(phone, `✅ ¡Hola de nuevo${part.nombre_piloto ? ', ' + part.nombre_piloto.split(' ')[0] : ''}! Tu cupo en el *Gran Premio Mobil Delvac 2026* ya está *CONFIRMADO*.\n\n🏁 Código: *${part.codigo_preregistro}*`);
-      return conv;
+    // Usuario que regresa (ya tiene preregistro) y no pidió reiniciar → responder según su estado
+    if (part && !forzarReinicio) {
+      return responderSegunEstado(phone, part, conv, send);
     }
 
     await send(phone,
@@ -174,18 +175,52 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
 
   // --- COMPLETO ---
   if (conv.step === 'completo') {
+    const { data: part } = await supabase.from('gpmd_participants')
+      .select('estado, codigo_preregistro, nombre_piloto').eq('phone', phone).maybeSingle();
+
     if (msg.type === 'image' && msg.mediaFileName) {
-      const { data: part } = await supabase.from('gpmd_participants').select('estado').eq('phone', phone).maybeSingle();
       if (part && part.estado === 'confirmado') {
         await send(phone, '✅ Tu cupo ya está *confirmado*, no necesitas enviar más facturas. 🏁');
         return conv;
       }
       return procesarFactura(phone, conv, msg.mediaFileName, send);
     }
-    await send(phone, 'Tu preregistro ya está en proceso. Te confirmaremos por aquí cuando validemos tu factura. 🏁\n\nSi necesitas ayuda, escribe a un asesor.');
+    return responderSegunEstado(phone, part, conv, send);
+  }
+
+  return conv;
+}
+
+// Responde a un usuario que regresa, según el estado real de su preregistro.
+// Para 'rechazado' y 'pre_registrado' deja la conversación lista para (re)enviar la factura.
+async function responderSegunEstado(phone, part, conv, send) {
+  if (!part) { // sin preregistro: arrancar de cero
+    await saveConv(phone, { step: 'inicio', data: {} });
+    conv.step = 'inicio';
+    return processIncoming({ phone, text: '' }, send);
+  }
+  const nombre = part.nombre_piloto ? ', ' + part.nombre_piloto.split(' ')[0] : '';
+
+  if (part.estado === 'confirmado') {
+    await send(phone, `✅ ¡Hola de nuevo${nombre}! Tu cupo en el *Gran Premio Mobil Delvac 2026* ya está *CONFIRMADO*. 🏁\n\n🏁 Código: *${part.codigo_preregistro}*`);
+    return conv;
+  }
+  if (part.estado === 'lista_espera') {
+    await send(phone, `🙏 ¡Hola${nombre}! Tu factura fue validada, pero los cupos ya se completaron y estás en *lista de espera*. Te avisaremos por aquí si se habilita un cupo.`);
+    return conv;
+  }
+  if (part.estado === 'en_revision') {
+    await send(phone, `⏳ ¡Hola${nombre}! Tu factura está *en revisión*. Te confirmaremos por aquí muy pronto para completar tu registro.`);
     return conv;
   }
 
+  // rechazado o pre_registrado → solo falta (re)enviar la factura
+  await saveConv(phone, { step: 'factura' });
+  conv.step = 'factura';
+  const intro = part.estado === 'rechazado'
+    ? `Tu *preregistro ya está hecho* ✅, pero aún no hemos podido validar tu factura.`
+    : `Tu *preregistro ya está hecho* ✅. Solo falta validar tu factura.`;
+  await send(phone, `${intro}\n\n📸 Envíame la *foto de tu factura* de compra de producto Mobil Delvac participante (clara, completa y legible) para validarla y *completar tu registro* para la revisión tecnomecánica.`);
   return conv;
 }
 
