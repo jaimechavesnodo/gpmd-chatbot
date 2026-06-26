@@ -8,6 +8,7 @@
   <link rel="icon" href="assets/img/favicon.png"/>
   <link rel="stylesheet" href="assets/css/main.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -22,6 +23,14 @@
         <div class="kpi-label">Cupos confirmados</div>
         <div class="kpi-value gradient-text" id="cupoVal">0/150</div>
       </div>
+    </div>
+
+    <div id="toolbarManual" style="display:none;gap:.6rem;margin-bottom:1rem;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" onclick="abrirManual()">➕ Ingreso manual</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('xlsInput').click()">📤 Cargar Excel</button>
+      <button class="btn btn-secondary btn-sm" onclick="descargarPlantilla()">⬇️ Descargar plantilla</button>
+      <input type="file" id="xlsInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="cargarExcel(this)"/>
+      <span class="muted" style="font-size:.78rem;align-self:center;">Los cupos manuales quedan confirmados y cuentan para los 150.</span>
     </div>
 
     <div class="filtros" id="filtros"></div>
@@ -53,6 +62,31 @@
   </div>
 </div>
 
+<!-- Modal ingreso manual -->
+<div class="modal-overlay" id="modalManual">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarManual()">✕</button>
+    <h2>Ingreso manual de cupo</h2>
+    <p class="muted" style="font-size:.82rem;margin-bottom:1rem;">Crea un cupo <b>confirmado</b> sin necesidad de factura. Cuenta para los 150.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
+      <div class="form-group"><label class="form-label">Nombre completo del piloto *</label><input class="form-control" id="m_nombre_piloto"/></div>
+      <div class="form-group"><label class="form-label">Tipo de documento</label>
+        <select class="form-control" id="m_tipo_documento_piloto"><option value="">—</option><option>Cédula</option><option>Pasaporte</option><option>Otro</option></select></div>
+      <div class="form-group"><label class="form-label">Número de documento *</label><input class="form-control" id="m_cedula"/></div>
+      <div class="form-group"><label class="form-label">Novato</label>
+        <select class="form-control" id="m_novato"><option value="">—</option><option value="Si">Novato</option><option value="No">No novato</option></select></div>
+      <div class="form-group"><label class="form-label">RH</label>
+        <select class="form-control" id="m_rh"><option value="">—</option><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="m_email"/></div>
+      <div class="form-group"><label class="form-label">Nombre copiloto</label><input class="form-control" id="m_nombre_copiloto"/></div>
+      <div class="form-group"><label class="form-label">Doc. copiloto</label><input class="form-control" id="m_documento_copiloto"/></div>
+      <div class="form-group"><label class="form-label">Vehículo (marca/modelo)</label><input class="form-control" id="m_vehiculo"/></div>
+      <div class="form-group"><label class="form-label">Placa</label><input class="form-control" id="m_placa"/></div>
+    </div>
+    <div style="margin-top:1rem;"><button class="btn btn-primary" id="mBtn" onclick="guardarManual()">Crear cupo confirmado</button></div>
+  </div>
+</div>
+
 <script src="assets/js/auth.js"></script>
 <script>
 let data = [], filtro = '';
@@ -62,7 +96,13 @@ const ESTADOS = [
 ];
 const LABEL = { pre_registrado:'Pre Registrado', en_revision:'En Revisión', confirmado:'Confirmado', rechazado:'Rechazado', lista_espera:'Lista de espera' };
 
-async function init(){ requireRole(['admin','cliente','agente']); renderSidebar('preregistrados'); renderFiltros(); await cargar(); }
+async function init(){
+  const u = requireRole(['admin','cliente','agente','consulta']); if(!u) return;
+  renderSidebar('preregistrados'); renderFiltros();
+  if(u.rol==='admin') document.getElementById('toolbarManual').style.display='flex';
+  await cargar();
+}
+const esConsulta = () => (getUser()?.rol === 'consulta');
 
 function renderFiltros(){
   document.getElementById('filtros').innerHTML = ESTADOS.map(e =>
@@ -109,15 +149,14 @@ function ver(id){
       ${campo('RH', p.rh)} ${campo('Email', p.email)}
       ${campo('Celular', p.phone)}
     </div>
-    <div class="card-title">Copiloto y vehículo (editable)</div>
+    <div class="card-title">Copiloto y vehículo${esConsulta()?'':' (editable)'}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
-      ${input('e_nombre_copiloto','Nombre copiloto',p.nombre_copiloto)}
-      ${input('e_numero_documento_copiloto','Doc. copiloto',p.numero_documento_copiloto)}
-      ${input('e_vehiculo_marca','Vehículo (marca/modelo)',p.vehiculo_marca)}
-      ${input('e_vehiculo_placa','Placa',p.vehiculo_placa)}
+      ${esConsulta()
+        ? campo('Copiloto',p.nombre_copiloto)+campo('Doc. copiloto',p.numero_documento_copiloto)+campo('Vehículo',p.vehiculo_marca)+campo('Placa',p.vehiculo_placa)
+        : input('e_nombre_copiloto','Nombre copiloto',p.nombre_copiloto)+input('e_numero_documento_copiloto','Doc. copiloto',p.numero_documento_copiloto)+input('e_vehiculo_marca','Vehículo (marca/modelo)',p.vehiculo_marca)+input('e_vehiculo_placa','Placa',p.vehiculo_placa)}
     </div>
     <div style="display:flex;gap:.6rem;margin-top:1rem;align-items:center;">
-      <button class="btn btn-primary btn-sm" onclick="guardarEdit('${p.id}')">Guardar cambios</button>
+      ${esConsulta()?'':`<button class="btn btn-primary btn-sm" onclick="guardarEdit('${p.id}')">Guardar cambios</button>`}
       ${f&&f.imagen_url?`<a class="btn btn-secondary btn-sm" href="${f.imagen_url}" target="_blank">Ver factura ↗</a>`:''}
     </div>`;
   document.getElementById('modal').classList.add('show');
@@ -136,6 +175,56 @@ async function guardarEdit(id){
   else showToast('No se pudo guardar','error');
 }
 const val = id => document.getElementById(id)?.value || '';
+
+// ---- Ingreso manual ----
+const COLS = ['nombre_piloto','tipo_documento','numero_documento','novato','rh','email','nombre_copiloto','documento_copiloto','vehiculo','placa'];
+
+function abrirManual(){
+  ['m_nombre_piloto','m_cedula','m_email','m_nombre_copiloto','m_documento_copiloto','m_vehiculo','m_placa'].forEach(id=>document.getElementById(id).value='');
+  ['m_tipo_documento_piloto','m_novato','m_rh'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('modalManual').classList.add('show');
+}
+function cerrarManual(){ document.getElementById('modalManual').classList.remove('show'); }
+
+async function guardarManual(){
+  const body = {
+    nombre_piloto: val('m_nombre_piloto'), tipo_documento_piloto: val('m_tipo_documento_piloto'),
+    cedula: val('m_cedula'), novato: val('m_novato'), rh: val('m_rh'), email: val('m_email'),
+    nombre_copiloto: val('m_nombre_copiloto'), documento_copiloto: val('m_documento_copiloto'),
+    vehiculo: val('m_vehiculo'), placa: val('m_placa'),
+  };
+  if(!body.nombre_piloto || !body.cedula){ showToast('Nombre y documento son obligatorios','error'); return; }
+  const btn=document.getElementById('mBtn'); btn.disabled=true; btn.textContent='Creando...';
+  const res = await apiFetch('api/participantes',{ method:'POST', body: JSON.stringify(body) });
+  const j = await res?.json();
+  if(res?.ok){ showToast(`Cupo creado (${j.codigo_preregistro})`,'ok'); cerrarManual(); cargar(); }
+  else showToast(j?.error||'No se pudo crear','error');
+  btn.disabled=false; btn.textContent='Crear cupo confirmado';
+}
+
+function descargarPlantilla(){
+  const ws = XLSX.utils.aoa_to_sheet([COLS, ['Juan Pérez','Cédula','1098765432','Si','O+','juan@correo.com','Ana Gómez','1122334455','Kenworth T800','ABC123']]);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Cupos');
+  XLSX.writeFile(wb, 'plantilla-cupos-gpmd.xlsx');
+}
+
+async function cargarExcel(input){
+  const file = input.files?.[0]; input.value='';
+  if(!file) return;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array' });
+    const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'' });
+    if(!filas.length){ showToast('El archivo está vacío','error'); return; }
+    if(!confirm(`Se cargarán ${filas.length} cupos confirmados. ¿Continuar?`)) return;
+    const res = await apiFetch('api/participantes/bulk',{ method:'POST', body: JSON.stringify({ filas }) });
+    const j = await res?.json();
+    if(res?.ok){
+      showToast(`Creados: ${j.creados}${j.errores.length?` · con ${j.errores.length} error(es)`:''}`, j.errores.length?'':'ok');
+      if(j.errores.length) console.warn('Errores carga Excel:', j.errores);
+      cargar();
+    } else showToast(j?.error||'No se pudo cargar','error');
+  } catch(e){ showToast('Archivo no válido','error'); console.error(e); }
+}
 
 init();
 </script>

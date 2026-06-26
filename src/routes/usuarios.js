@@ -18,7 +18,7 @@ router.get('/', requireAuth(['admin']), async (req, res) => {
 router.post('/', requireAuth(['admin']), async (req, res) => {
   const { email, nombre, password, rol } = req.body;
   if (!email || !nombre || !password || !rol) return res.status(400).json({ error: 'Todos los campos son requeridos' });
-  if (!['admin', 'cliente', 'agente'].includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
+  if (!['admin', 'cliente', 'agente', 'consulta'].includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
 
   const password_hash = await bcrypt.hash(password, 12);
   const { data, error } = await supabase
@@ -40,7 +40,7 @@ router.patch('/:id', requireAuth(['admin']), async (req, res) => {
   const updates = {};
   if (nombre !== undefined) updates.nombre = nombre;
   if (rol !== undefined) {
-    if (!['admin', 'cliente', 'agente'].includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
+    if (!['admin', 'cliente', 'agente', 'consulta'].includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
     updates.rol = rol;
   }
   if (activo !== undefined) updates.activo = activo;

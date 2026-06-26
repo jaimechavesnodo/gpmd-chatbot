@@ -4,7 +4,7 @@ const supabase = require('../lib/supabase');
 const { requireAuth } = require('../middleware/auth');
 
 // GET /api/buscar?q=  — busca participantes por cédula, nombre o placa
-router.get('/', requireAuth(['admin', 'agente', 'cliente']), async (req, res) => {
+router.get('/', requireAuth(['admin', 'agente', 'cliente', 'consulta']), async (req, res) => {
   const q = (req.query.q || '').trim();
   if (q.length < 2) return res.json([]);
   const like = `%${q}%`;

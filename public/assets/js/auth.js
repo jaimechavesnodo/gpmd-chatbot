@@ -41,9 +41,9 @@ function renderSidebar(activeKey) {
   if (!user) return;
 
   const nav = [
-    { key: 'preregistrados', href: 'preregistrados.html', icon: '📋', label: 'Preregistrados', roles: ['admin','cliente','agente'] },
+    { key: 'preregistrados', href: 'preregistrados.html', icon: '📋', label: 'Preregistrados', roles: ['admin','cliente','agente','consulta'] },
     { key: 'aprobador',      href: 'aprobador.html',      icon: '✅', label: 'Aprobador', roles: ['admin','agente'] },
-    { key: 'buscar',         href: 'buscar.html',         icon: '🔎', label: 'Buscar', roles: ['admin','cliente','agente'] },
+    { key: 'buscar',         href: 'buscar.html',         icon: '🔎', label: 'Buscar', roles: ['admin','cliente','agente','consulta'] },
     { key: 'dashboard',      href: 'dashboard.html',      icon: '📊', label: 'Dashboard', roles: ['admin','cliente'] },
     { key: 'pdv',            href: 'pdv.html',            icon: '🏪', label: 'PDV y Productos', roles: ['admin'] },
     { key: 'log',            href: 'log.html',            icon: '🗒️', label: 'Log', roles: ['admin'] },
@@ -58,7 +58,6 @@ function renderSidebar(activeKey) {
 
   document.getElementById('sidebar').innerHTML = `
     <div class="sidebar-brand">
-      <div class="wordmark"><span class="dot"></span> <span>Smart Assistance</span></div>
       <img src="assets/img/Logo_MobilDelvac_v2.png" alt="Mobil Delvac" class="logo-mobil"/>
     </div>
     <nav class="sidebar-nav">${links}</nav>

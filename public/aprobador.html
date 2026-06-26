@@ -27,6 +27,14 @@
     .split-divider:hover,.split-divider.dragging { background:var(--sa-magenta); }
     .split-right { flex:0 0 460px; min-width:340px; overflow-y:auto; padding-right:.3rem; }
     .pdv-info { font-size:.8rem; color:var(--muted); background:#fbfbfc; border:1px solid var(--line); border-radius:10px; padding:.6rem .8rem; margin-top:.4rem; }
+    .pdv-sug { position:absolute; left:0; right:0; top:100%; z-index:30; background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.12); max-height:240px; overflow-y:auto; display:none; }
+    .pdv-sug.show { display:block; }
+    .pdv-sug .it { padding:.5rem .7rem; cursor:pointer; font-size:.82rem; border-bottom:1px solid var(--line); }
+    .pdv-sug .it:last-child { border-bottom:none; }
+    .pdv-sug .it:hover { background:#fdf2fa; }
+    .pdv-sug .it b { color:var(--ink); }
+    .pdv-chosen { font-size:.85rem; font-weight:700; color:#15803d; background:var(--green-bg); border:1px solid var(--green); border-radius:10px; padding:.5rem .7rem; margin-top:.4rem; display:none; }
+    .pdv-chosen.show { display:block; }
     @media (max-width:980px){ .split{flex-direction:column;height:auto;} .split-divider{display:none;} .split-right{flex:1 1 auto;} }
   </style>
 </head>
@@ -62,12 +70,13 @@
           <div class="split-right">
            <div class="factura-form-panel">
             <div class="card-title">Establecimiento (PDV)</div>
-            <div class="form-group"><label class="form-label">NIT (editable, recarga clientes)</label>
-              <input class="form-control" id="f_nit" onchange="cargarClientes(this.value)" placeholder="NIT del emisor"/></div>
-            <div class="form-group"><label class="form-label">Cliente *</label>
-              <select class="form-control" id="f_cliente" onchange="onCliente()"><option value="">Cargando...</option></select>
+            <div class="form-group" style="position:relative;">
+              <label class="form-label">NIT o cliente — escribe para buscar *</label>
+              <input class="form-control" id="f_pdv_search" autocomplete="off" placeholder="Escribe el NIT del emisor o el nombre del cliente…" oninput="buscarPdv(this.value)" onfocus="buscarPdv(this.value)"/>
+              <div class="pdv-sug" id="pdvSug"></div>
             </div>
-            <div class="pdv-info" id="pdvInfo">Agente / Departamento / Ciudad / Canal / Razón Social aparecerán al elegir el cliente.</div>
+            <div class="pdv-chosen" id="pdvChosen"></div>
+            <div class="pdv-info" id="pdvInfo">Escribe el NIT del emisor y elige el cliente correcto de las coincidencias.</div>
 
             <div class="card-title" style="margin-top:1.1rem;">Producto y factura</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
@@ -114,7 +123,7 @@
 
 <script src="assets/js/auth.js"></script>
 <script>
-let cola=[], actual=null, decision=null, zoomLevel=1, pdvs=[];
+let cola=[], actual=null, decision=null, zoomLevel=1, selectedPdv=null, sugTimer=null;
 
 async function init(){ requireRole(['admin','agente']); renderSidebar('aprobador'); await cargarCola(); initSplitter(); }
 
@@ -156,8 +165,13 @@ async function abrir(id){
   const mb = document.getElementById('motivoBox');
   if(actual.ocr_motivo_revision){ mb.style.display='block'; mb.textContent='⚠️ '+actual.ocr_motivo_revision; } else mb.style.display='none';
 
-  // Cargar clientes del NIT
-  await cargarClientes(actual.nit);
+  // Reset del buscador de PDV y precarga con el NIT leído por OCR
+  selectedPdv = null;
+  document.getElementById('pdvChosen').classList.remove('show');
+  document.getElementById('pdvSug').classList.remove('show');
+  document.getElementById('pdvInfo').innerHTML = 'Escribe el NIT del emisor y elige el cliente correcto de las coincidencias.';
+  document.getElementById('f_pdv_search').value = actual.nit || '';
+  if(actual.nit) await buscarPdv(actual.nit, actual.cliente);
 
   document.getElementById('optAprobado').classList.remove('selected');
   document.getElementById('optRechazado').classList.remove('selected');
@@ -167,27 +181,33 @@ async function abrir(id){
   document.getElementById('aprobadorPanel').style.display='block';
 }
 
-async function cargarClientes(nit){
-  const sel = document.getElementById('f_cliente');
-  const res = await apiFetch('api/pdv' + (nit?`?nit=${encodeURIComponent(nit)}`:''));
-  pdvs = res ? await res.json() : [];
-  if(!pdvs.length){
-    // sin coincidencia por NIT → ofrecer todos para elegir manual
-    const all = await apiFetch('api/pdv'); pdvs = all? await all.json():[];
-    sel.innerHTML = '<option value="">— NIT no coincide, elegir cliente manualmente —</option>' + pdvs.map(p=>`<option value="${p.id}">${p.cliente} (${p.nit||'s/NIT'})</option>`).join('');
-  } else {
-    sel.innerHTML = '<option value="">Seleccionar cliente...</option>' + pdvs.map(p=>`<option value="${p.id}">${p.cliente}</option>`).join('');
-    if(pdvs.length===1){ sel.value=pdvs[0].id; }
-  }
-  onCliente();
+// Buscador con autocompletar por NIT o cliente. Si autoCliente viene, preselecciona esa coincidencia.
+async function buscarPdv(q, autoCliente){
+  q = (q||'').trim();
+  const sug = document.getElementById('pdvSug');
+  clearTimeout(sugTimer);
+  if(q.length < 2){ sug.classList.remove('show'); sug.innerHTML=''; return; }
+  await new Promise(r => { sugTimer = setTimeout(r, autoCliente?0:250); });
+  const res = await apiFetch(`api/pdv?q=${encodeURIComponent(q)}`);
+  const rows = res ? await res.json() : [];
+  if(!rows.length){ sug.innerHTML = '<div class="it muted">Sin coincidencias para ese NIT/cliente</div>'; sug.classList.add('show'); return; }
+  sug.innerHTML = rows.map(p=>`<div class="it" onclick='seleccionarPdv(${JSON.stringify(p).replace(/'/g,"&#39;")})'><b>${p.cliente}</b><br><span class="muted">NIT ${p.nit||'s/NIT'} · ${p.canal||'—'} · ${p.ciudad||'—'}</span></div>`).join('');
+  sug.classList.add('show');
+  // preselección automática cuando el OCR ya resolvió un único cliente
+  if(autoCliente){ const m = rows.find(p=>p.cliente===autoCliente) || (rows.length===1?rows[0]:null); if(m) seleccionarPdv(m); }
 }
-function onCliente(){
-  const p = pdvs.find(x=>String(x.id)===document.getElementById('f_cliente').value);
-  document.getElementById('pdvInfo').innerHTML = p
-    ? `<b>Agente:</b> ${p.agente||'—'} &nbsp;·&nbsp; <b>Depto:</b> ${p.departamento||'—'} &nbsp;·&nbsp; <b>Ciudad:</b> ${p.ciudad||'—'}<br>`
-      + `<b>Canal:</b> ${p.canal||'—'} &nbsp;·&nbsp; <b>Razón Social:</b> ${p.razon_social||'—'} <span style="color:var(--muted-2)">(informativos, no editables)</span>`
-    : 'Agente / Departamento / Ciudad / Canal / Razón Social aparecerán al elegir el cliente.';
+function seleccionarPdv(p){
+  selectedPdv = p;
+  document.getElementById('pdvSug').classList.remove('show');
+  document.getElementById('f_pdv_search').value = `${p.cliente} — NIT ${p.nit||'s/NIT'}`;
+  const ch = document.getElementById('pdvChosen');
+  ch.textContent = `✓ Cliente: ${p.cliente}`; ch.classList.add('show');
+  document.getElementById('pdvInfo').innerHTML =
+    `<b>Agente:</b> ${p.agente||'—'} &nbsp;·&nbsp; <b>Depto:</b> ${p.departamento||'—'} &nbsp;·&nbsp; <b>Ciudad:</b> ${p.ciudad||'—'}<br>`
+    + `<b>Canal:</b> ${p.canal||'—'} &nbsp;·&nbsp; <b>Razón Social:</b> ${p.razon_social||'—'} <span style="color:var(--muted-2)">(informativos, no editables)</span>`;
 }
+// cerrar sugerencias al hacer clic fuera
+document.addEventListener('click', e => { if(!e.target.closest('#f_pdv_search') && !e.target.closest('#pdvSug')) document.getElementById('pdvSug')?.classList.remove('show'); });
 
 function setVal(id,v){ const e=document.getElementById(id); if(e&&v!=null) e.value=v; }
 function setDecision(d){
@@ -204,8 +224,8 @@ async function guardar(){
   const btn=document.getElementById('btnGuardar'); btn.disabled=true; btn.textContent='Guardando...';
   let res;
   if(decision==='aprobado'){
-    const pdv_id = document.getElementById('f_cliente').value;
-    if(!pdv_id){ showToast('Selecciona el Cliente (PDV)','error'); reset(btn); return; }
+    const pdv_id = selectedPdv?.id;
+    if(!pdv_id){ showToast('Busca el NIT y elige el Cliente (PDV)','error'); reset(btn); return; }
     res = await apiFetch(`api/facturas/${actual.id}/aprobar`, { method:'PATCH', body: JSON.stringify({
       pdv_id, referencia_producto:v('f_referencia_producto'), presentacion:v('f_presentacion'),
       cantidad:parseFloat(v('f_cantidad'))||null, valor_total:parseFloat(v('f_valor_total'))||null, fecha_compra:v('f_fecha_compra')||null,

@@ -29,7 +29,7 @@
 const LABEL = { pre_registrado:'Pre Registrado', en_revision:'En Revisión', confirmado:'Confirmado', rechazado:'Rechazado', lista_espera:'Lista de espera' };
 let timer;
 
-async function init(){ requireRole(['admin','cliente','agente']); renderSidebar('buscar');
+async function init(){ requireRole(['admin','cliente','agente','consulta']); renderSidebar('buscar');
   document.getElementById('q').addEventListener('input', ()=>{ clearTimeout(timer); timer=setTimeout(buscar,350); });
   document.getElementById('q').focus();
 }

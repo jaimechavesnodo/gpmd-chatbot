@@ -8,6 +8,9 @@ const TIPO_DOC = ['Cédula', 'Pasaporte', 'Otro'];
 const RH = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
 const LIMITE_CONFIRMADOS = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150;
 
+// Texto reutilizable para cuando la factura pasa a validación manual (incluye horario)
+const MSG_EN_REVISION = 'Un asesor la validará: el proceso puede tardar entre *1 y 3 horas* en horario *lunes a viernes de 8:00am a 6:00pm* y *sábados de 8:00am a 1:00pm*. Apenas sea validada te avisamos por aquí. ⏳';
+
 // ---------- Pasos del registro (en orden) ----------
 // tras 'email' (último campo del piloto) se crea el participante 'pre_registrado'.
 const STEPS = [
@@ -44,13 +47,6 @@ const STEPS = [
     normalize: (v) => v.replace(/\s/g, '') },
   { field: 'rh_copiloto', opciones: RH, skipIf: (d) => !d.tiene_copiloto,
     q: '*RH* del copiloto:' },
-  // --- Vehículo (opcional) ---
-  { field: 'vehiculo_marca', optional: true,
-    q: '¿*Marca y modelo* del vehículo? (opcional, escribe *no* para omitir)',
-    normalize: (v) => (/^no$/i.test(v.trim()) ? '' : v.trim()) },
-  { field: 'vehiculo_placa', optional: true,
-    q: '¿*Placa* del vehículo? (opcional, escribe *no* para omitir)',
-    normalize: (v) => (/^no$/i.test(v.trim()) ? '' : v.replace(/\s/g, '').toUpperCase()) },
 ];
 
 function parseOpcion(text, opciones) {
@@ -210,7 +206,7 @@ async function responderSegunEstado(phone, part, conv, send) {
     return conv;
   }
   if (part.estado === 'en_revision') {
-    await send(phone, `⏳ ¡Hola${nombre}! Tu factura está *en revisión*. Te confirmaremos por aquí muy pronto para completar tu registro.`);
+    await send(phone, `⏳ ¡Hola${nombre}! Tu factura está *en revisión*. ${MSG_EN_REVISION}`);
     return conv;
   }
 
@@ -287,7 +283,7 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     await guardarFactura(part.id, { imagen_url: imagenUrl || mediaFileName, ocr_motivo_revision: 'Error técnico OCR: ' + e.message, estado: 'en_revision' });
     await supabase.from('gpmd_participants').update({ estado: 'en_revision' }).eq('id', part.id);
     await saveConv(phone, { step: 'completo' }); conv.step = 'completo';
-    await send(phone, '📩 Recibí tu factura. Un asesor la revisará y te confirmaremos pronto para confirmar tu cupo. ⏳');
+    await send(phone, `📩 Recibí tu factura. ${MSG_EN_REVISION}`);
     return conv;
   }
 
@@ -315,7 +311,7 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
 
   if (!r.pasaAuto) {
     await supabase.from('gpmd_participants').update({ estado: 'en_revision' }).eq('id', part.id);
-    await send(phone, '📩 Recibí tu factura. Un asesor la revisará y te confirmaremos pronto para confirmar tu cupo. ⏳');
+    await send(phone, `📩 Recibí tu factura. ${MSG_EN_REVISION}`);
     return conv;
   }
 

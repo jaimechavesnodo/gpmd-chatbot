@@ -1,0 +1,55 @@
+{
+  "name": "wf-gpmd-08-resumen-email",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [
+          { "field": "cronExpression", "expression": "0 13 * * *" },
+          { "field": "cronExpression", "expression": "0 19 * * *" },
+          { "field": "cronExpression", "expression": "0 0 * * *" }
+        ] }
+      },
+      "id": "cron",
+      "name": "Cron 8am/2pm/7pm (UTC)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://nodo.host/gpmd-chatbot/webhook/resumen",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "x-gpmd-secret", "value": "={{ $env.GPMD_WEBHOOK_SECRET }}" } ] },
+        "options": {}
+      },
+      "id": "get-resumen",
+      "name": "Obtener Resumen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "jaime.chaves@nodo.live",
+        "toEmail": "jaime.chaves@nodo.live",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Enviar Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [680, 300],
+      "credentials": { "smtp": { "id": "SMTP_CRED_ID", "name": "SMTP GPMD" } }
+    }
+  ],
+  "connections": {
+    "Cron 8am/2pm/7pm (UTC)": { "main": [[{ "node": "Obtener Resumen", "type": "main", "index": 0 }]] },
+    "Obtener Resumen": { "main": [[{ "node": "Enviar Email", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gpmd" }]
+}
