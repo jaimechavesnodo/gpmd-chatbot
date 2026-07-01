@@ -39,16 +39,18 @@ async function importPdv() {
   const data = rows('pdv-participantes.xlsx');
   const out = [];
   for (const r of data) {
-    const cliente = clean(r['Cliente']);
+    // El "Cliente" es el nombre comercial; el listado final lo llama "Nombre comercial".
+    const cliente = clean(r['Cliente'] || r['Nombre comercial']);
     if (!cliente) continue;
     out.push({
       cliente,
-      nit: nitOrNull(r['NIT']),
-      agente: clean(r['Agente']) || null,
+      nit: nitOrNull(r['NIT'] || r['Nit']),
+      agente: clean(r['Agente'] || r['Agente comercial']) || null,
       departamento: clean(r['Departamento']) || null,
       ciudad: clean(r['Ciudad']) || null,
       canal: clean(r['Canal']) || null,
       razon_social: clean(r['Razon Social'] || r['Razón Social']) || null,
+      direccion: clean(r['Dirección'] || r['Direccion']) || null,
     });
   }
   // Deduplicar por (nit, cliente) — el archivo puede traer filas repetidas
@@ -62,7 +64,12 @@ async function importPdv() {
 
   // Reemplazo total: estos son los PDV finales del proyecto.
   await supabase.from('gpmd_pdv').delete().neq('id', 0);
-  const { error } = await supabase.from('gpmd_pdv').insert(dedup);
+  let { error } = await supabase.from('gpmd_pdv').insert(dedup);
+  if (error && /direccion/i.test(error.message)) {
+    // La columna aún no existe (falta correr sql/007_pdv_direccion.sql) — reintenta sin ella.
+    console.warn('  ⚠ columna "direccion" no existe todavía; se importa sin direcciones (correr sql/007 y reimportar)');
+    ({ error } = await supabase.from('gpmd_pdv').insert(dedup.map(({ direccion, ...rest }) => rest)));
+  }
   if (error) throw new Error('pdv: ' + error.message);
   const nits = new Set(dedup.map((p) => p.nit).filter(Boolean));
   console.log(`✓ pdv: ${dedup.length} clientes en ${nits.size} NITs (reemplazo total${dups ? `, ${dups} duplicado(s) omitido(s)` : ''})`);

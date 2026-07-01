@@ -28,8 +28,9 @@ router.post('/', async (req, res) => {
 
     const type = b.type || 'text';
     const text = typeof b.text === 'string' ? b.text : (b.text?.body || '');
-    // Para imágenes WATI manda la ruta del archivo en `data`
-    const mediaFileName = type === 'image' ? (b.data || b.fileName || '') : '';
+    // Para imágenes y documentos (PDF) WATI manda la ruta del archivo en `data`
+    const esArchivo = type === 'image' || type === 'document';
+    const mediaFileName = esArchivo ? (b.data || b.fileName || '') : '';
 
     console.log(`[WATI in] ${phone} type=${type} text="${(text || '').slice(0, 40)}"`);
     await processIncoming({ phone, text, type, mediaFileName, senderName: b.senderName });

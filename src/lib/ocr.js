@@ -15,7 +15,10 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY, fetch: robustFetch, maxRetries: 4, timeout: 120000,
 });
 
-const UMBRAL = () => parseFloat(process.env.OCR_CONFIANZA_MINIMA) || 0.95;       // producto vs catálogo
+// Calibrado con lote real de 34 facturas de entrenamiento (jul/2026): los matches
+// genuinos de producto se autoevalúan en 0.80-0.95, los ambiguos/incorrectos en
+// ≤0.55 — 0.85 separa ambos grupos con margen sin dejar pasar falsos positivos.
+const UMBRAL = () => parseFloat(process.env.OCR_CONFIANZA_MINIMA) || 0.85;       // producto vs catálogo
 const UMBRAL_NIT = () => parseFloat(process.env.OCR_NIT_CONFIANZA_MINIMA) || 0.75; // NIT + Cliente
 
 // ---------- Catálogos (cacheados en memoria, refrescables) ----------
@@ -62,10 +65,17 @@ const USER_TEXT = 'Devuelve un JSON con: nit (NIT del emisor, string solo con el
   + 'Si hay varias lineas Mobil Delvac participantes, reporta la de mayor valor_total.';
 
 // ---------- OCR + evaluación ----------
+// Las facturas pueden llegar como imagen (foto de WhatsApp) o como PDF
+// (documento adjunto). Claude soporta ambos con bloques de contenido distintos.
 async function analizarFactura(buffer, contentType = 'image/jpeg') {
   await getCatalogos();
   const base64 = buffer.toString('base64');
-  const media_type = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(contentType) ? contentType : 'image/jpeg';
+  const esPdf = (contentType || '').includes('pdf');
+  const media_type = esPdf ? 'application/pdf'
+    : ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(contentType) ? contentType : 'image/jpeg';
+  const archivo = esPdf
+    ? { type: 'document', source: { type: 'base64', media_type, data: base64 } }
+    : { type: 'image', source: { type: 'base64', media_type, data: base64 } };
 
   const resp = await anthropic.messages.create({
     model: 'claude-opus-4-8',
@@ -74,7 +84,7 @@ async function analizarFactura(buffer, contentType = 'image/jpeg') {
     messages: [{
       role: 'user',
       content: [
-        { type: 'image', source: { type: 'base64', media_type, data: base64 } },
+        archivo,
         { type: 'text', text: USER_TEXT },
       ],
     }],

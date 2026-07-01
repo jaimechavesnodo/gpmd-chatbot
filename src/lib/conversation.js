@@ -164,8 +164,8 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
 
   // --- ESPERANDO FACTURA ---
   if (conv.step === 'factura') {
-    if (msg.type === 'image' && msg.mediaFileName) return procesarFactura(phone, conv, msg.mediaFileName, send);
-    await send(phone, '📸 Por favor envíame la *foto de tu factura* de compra del producto Mobil Delvac participante. Debe verse clara, completa y legible.');
+    if ((msg.type === 'image' || msg.type === 'document') && msg.mediaFileName) return procesarFactura(phone, conv, msg.mediaFileName, send);
+    await send(phone, '📸 Por favor envíame la *foto (o el PDF) de tu factura* de compra del producto Mobil Delvac participante. Debe verse clara, completa y legible.');
     return conv;
   }
 
@@ -174,7 +174,7 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
     const { data: part } = await supabase.from('gpmd_participants')
       .select('estado, codigo_preregistro, nombre_piloto').eq('phone', phone).maybeSingle();
 
-    if (msg.type === 'image' && msg.mediaFileName) {
+    if ((msg.type === 'image' || msg.type === 'document') && msg.mediaFileName) {
       if (part && part.estado === 'confirmado') {
         await send(phone, '✅ Tu cupo ya está *confirmado*, no necesitas enviar más facturas. 🏁');
         return conv;
@@ -216,7 +216,7 @@ async function responderSegunEstado(phone, part, conv, send) {
   const intro = part.estado === 'rechazado'
     ? `Tu *preregistro ya está hecho* ✅, pero aún no hemos podido validar tu factura.`
     : `Tu *preregistro ya está hecho* ✅. Solo falta validar tu factura.`;
-  await send(phone, `${intro}\n\n📸 Envíame la *foto de tu factura* de compra de producto Mobil Delvac participante (clara, completa y legible) para validarla y *completar tu registro* para la revisión tecnomecánica.`);
+  await send(phone, `${intro}\n\n📸 Envíame la *foto (o el PDF) de tu factura* de compra de producto Mobil Delvac participante (clara, completa y legible) para validarla y *completar tu registro* para la revisión tecnomecánica.`);
   return conv;
 }
 
@@ -251,7 +251,7 @@ async function finalizarRegistro(phone, conv, send) {
 
   await saveConv(phone, { step: 'factura' });
   conv.step = 'factura';
-  await send(phone, '📸 *Último paso:* envíame la *foto de tu factura* de compra del producto Mobil Delvac participante. Asegúrate de que se vea clara, completa y legible.');
+  await send(phone, '📸 *Último paso:* envíame la *foto (o el PDF) de tu factura* de compra del producto Mobil Delvac participante. Asegúrate de que se vea clara, completa y legible.');
   return conv;
 }
 
@@ -334,7 +334,7 @@ async function guardarFactura(participantId, campos) {
 }
 
 async function subirImagen(buffer, contentType, participantId) {
-  const ext = contentType.includes('png') ? 'png' : 'jpg';
+  const ext = contentType.includes('pdf') ? 'pdf' : contentType.includes('png') ? 'png' : 'jpg';
   const p = `${participantId}/${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from('facturas').upload(p, buffer, { contentType, upsert: true });
   if (error) { console.warn('[GPMD] storage upload:', error.message); return null; }
