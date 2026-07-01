@@ -13,7 +13,14 @@ const DIR = process.argv[2] || path.join(__dirname, '..', '..', '..', 'tablas-in
 function rows(file) {
   const wb = XLSX.readFile(path.join(DIR, file));
   const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: '' });
+  const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  // Los encabezados del Excel a veces traen espacios al final (ej: "Dirección ")
+  // que rompen el acceso por nombre exacto — se normalizan al leer.
+  return data.map((r) => {
+    const out = {};
+    for (const k of Object.keys(r)) out[k.trim()] = r[k];
+    return out;
+  });
 }
 
 const clean = (v) => String(v == null ? '' : v).trim();
