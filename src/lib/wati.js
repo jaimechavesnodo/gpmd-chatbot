@@ -34,6 +34,19 @@ async function sendInteractiveButtons(phone, body, buttonTexts) {
   return data;
 }
 
+// Enviar un archivo (PDF, imagen, etc.) de sesión con caption opcional.
+// `buffer` es el contenido del archivo, `filename`/`mimeType` describen el adjunto.
+async function sendSessionFile(phone, buffer, filename, mimeType, caption = '') {
+  const url = `${BASE_URL}/api/v1/sendSessionFile/${phone}`;
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: mimeType }), filename);
+  if (caption) form.append('caption', caption);
+  const res = await fetch(url, { method: 'POST', headers: authHeaders(), body: form });
+  const data = await res.json().catch(() => ({}));
+  if (data.result === false) console.warn(`[WATI] archivo ${phone} →`, JSON.stringify(data).slice(0, 200));
+  return data;
+}
+
 // Enviar template (fuera de ventana de 24h)
 async function sendTemplateMessage(phone, templateName, params = []) {
   const url = `${BASE_URL}/api/v1/sendTemplateMessage?whatsappNumber=${phone}`;
@@ -83,4 +96,4 @@ async function downloadMedia(fileName) {
   return { buffer, contentType };
 }
 
-module.exports = { sendSessionMessage, sendTemplateMessage, downloadMedia, updateContactAttributes, sendInteractiveButtons };
+module.exports = { sendSessionMessage, sendTemplateMessage, downloadMedia, updateContactAttributes, sendInteractiveButtons, sendSessionFile };

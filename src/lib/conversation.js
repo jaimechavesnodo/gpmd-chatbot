@@ -1,9 +1,13 @@
 // Máquina de estados conversacional del chatbot GPMD (orquestada por el backend).
 // WATI reenvía cada mensaje entrante a /webhook/wati → processIncoming().
+const fs = require('fs');
+const path = require('path');
 const supabase = require('./supabase');
 const wati = require('./wati');
 const ocr = require('./ocr');
 const { logActivity } = require('../middleware/logger');
+
+const PDF_AUTORIZACION = path.join(__dirname, '..', 'assets', 'legal', 'autorizacion-datos-gpmd-2026.pdf');
 
 const TIPO_DOC = ['Cédula', 'Pasaporte', 'Otro'];
 const RH = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
@@ -19,6 +23,20 @@ const MSG_CONSENTIMIENTO = '📋 *Autorización de Tratamiento de Datos Personal
   + 'TERPEL S.A. (Responsable) y NODO LABS S.A.S. (Encargado tecnológico) recolectarán tus datos (nombre, documento, celular, correo, RH e imagen de tu factura) para gestionar tu preinscripción, validar tu participación y contactarte durante el proceso, conforme a la Ley 1581 de 2012.\n\n'
   + 'Puedes conocer, actualizar, rectificar o revocar tus datos en cualquier momento.\n\n'
   + '¿Autorizas el tratamiento de tus datos personales?';
+
+// Envía el PDF de Términos y Condiciones (solo la primera vez) + la pregunta con botones.
+async function enviarConsentimiento(phone, { incluirPdf = true } = {}) {
+  if (incluirPdf) {
+    try {
+      const buffer = fs.readFileSync(PDF_AUTORIZACION);
+      await wati.sendSessionFile(phone, buffer, 'Terminos-y-condiciones-GPMD-2026.pdf', 'application/pdf',
+        'Términos y Condiciones — Autorización de Tratamiento de Datos Personales, Gran Premio Mobil Delvac 2026');
+    } catch (e) {
+      console.error('[GPMD] no se pudo enviar el PDF de autorización:', e.message);
+    }
+  }
+  await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES);
+}
 
 // ---------- Pasos del registro (en orden) ----------
 // tras 'email' (último campo del piloto) se crea el participante 'pre_registrado'.
@@ -128,18 +146,18 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
     // Nuevo usuario (o reinicio): primero pedir autorización de tratamiento de datos
     await saveConv(phone, { step: 'consentimiento', data: {} });
     conv.step = 'consentimiento'; conv.data = {};
-    await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES);
+    await enviarConsentimiento(phone);
     return conv;
   }
 
   // --- CONSENTIMIENTO DE TRATAMIENTO DE DATOS ---
   if (conv.step === 'consentimiento') {
-    if (!text) { await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES); return conv; }
+    if (!text) { await enviarConsentimiento(phone, { incluirPdf: false }); return conv; }
 
     const op = parseOpcion(text, CONSENT_BOTONES);
     if (!op) {
       await send(phone, '⚠️ Por favor selecciona una de las opciones:');
-      await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES);
+      await enviarConsentimiento(phone, { incluirPdf: false });
       return conv;
     }
 
