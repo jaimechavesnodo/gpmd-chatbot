@@ -3,10 +3,19 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { requireAuth } = require('../middleware/auth');
 
-// GET /api/productos — catálogo participante
+// GET /api/productos?q=...  → autocompletar por nombre de producto (para el aprobador)
+// GET /api/productos        → catálogo completo (gestión)
 router.get('/', requireAuth(['admin', 'agente', 'cliente']), async (req, res) => {
   const { data, error } = await supabase.from('gpmd_productos').select('*').order('producto');
   if (error) return res.status(500).json({ error: error.message });
+
+  const q = (req.query.q || '').trim().toLowerCase();
+  if (q) {
+    const rows = (data || [])
+      .filter((p) => p.participa && p.producto && p.producto.toLowerCase().includes(q))
+      .slice(0, 15);
+    return res.json(rows);
+  }
   res.json(data);
 });
 

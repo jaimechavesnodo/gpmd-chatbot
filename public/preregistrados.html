@@ -149,11 +149,11 @@ function ver(id){
       ${campo('RH', p.rh)} ${campo('Email', p.email)}
       ${campo('Celular', p.phone)}
     </div>
-    <div class="card-title">Copiloto y vehículo${esConsulta()?'':' (editable)'}</div>
+    <div class="card-title">Copiloto${esConsulta()?'':' (editable)'}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
       ${esConsulta()
-        ? campo('Copiloto',p.nombre_copiloto)+campo('Doc. copiloto',p.numero_documento_copiloto)+campo('Vehículo',p.vehiculo_marca)+campo('Placa',p.vehiculo_placa)
-        : input('e_nombre_copiloto','Nombre copiloto',p.nombre_copiloto)+input('e_numero_documento_copiloto','Doc. copiloto',p.numero_documento_copiloto)+input('e_vehiculo_marca','Vehículo (marca/modelo)',p.vehiculo_marca)+input('e_vehiculo_placa','Placa',p.vehiculo_placa)}
+        ? campo('Copiloto',p.nombre_copiloto)+campo('Doc. copiloto',p.numero_documento_copiloto)
+        : input('e_nombre_copiloto','Nombre copiloto',p.nombre_copiloto)+input('e_numero_documento_copiloto','Doc. copiloto',p.numero_documento_copiloto)}
     </div>
     <div style="display:flex;gap:.6rem;margin-top:1rem;align-items:center;">
       ${esConsulta()?'':`<button class="btn btn-primary btn-sm" onclick="guardarEdit('${p.id}')">Guardar cambios</button>`}
@@ -168,7 +168,6 @@ function cerrarModal(){ document.getElementById('modal').classList.remove('show'
 async function guardarEdit(id){
   const body = {
     nombre_copiloto: val('e_nombre_copiloto'), numero_documento_copiloto: val('e_numero_documento_copiloto'),
-    vehiculo_marca: val('e_vehiculo_marca'), vehiculo_placa: val('e_vehiculo_placa'),
   };
   const res = await apiFetch(`api/participantes/${id}`, { method:'PATCH', body: JSON.stringify(body) });
   if(res&&res.ok){ showToast('Datos actualizados','ok'); cerrarModal(); cargar(); }
