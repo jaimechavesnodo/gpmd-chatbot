@@ -15,10 +15,12 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY, fetch: robustFetch, maxRetries: 4, timeout: 120000,
 });
 
-// Calibrado con lote real de 34 facturas de entrenamiento (jul/2026): los matches
-// genuinos de producto se autoevalúan en 0.80-0.95, los ambiguos/incorrectos en
-// ≤0.55 — 0.85 separa ambos grupos con margen sin dejar pasar falsos positivos.
-const UMBRAL = () => parseFloat(process.env.OCR_CONFIANZA_MINIMA) || 0.85;       // producto vs catálogo
+// Bajado a 0.70 a pedido de Jaime (jul/2026) para que más facturas se aprueben
+// automáticamente. El lote de calibración (34 facturas reales) no tenía casos
+// entre 0.55 y 0.80, así que este valor no se ha validado empíricamente contra
+// facturas reales en ese rango — monitorear el aprobador por si empiezan a
+// aprobarse automáticamente productos ambiguos.
+const UMBRAL = () => parseFloat(process.env.OCR_CONFIANZA_MINIMA) || 0.70;       // producto vs catálogo
 const UMBRAL_NIT = () => parseFloat(process.env.OCR_NIT_CONFIANZA_MINIMA) || 0.75; // NIT + Cliente
 
 // ---------- Catálogos (cacheados en memoria, refrescables) ----------
