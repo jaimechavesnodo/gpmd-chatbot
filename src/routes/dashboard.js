@@ -21,10 +21,14 @@ function agrupar(facturas, campo) {
 
 router.get('/', requireAuth(['admin', 'cliente']), async (req, res) => {
   const estados = ['pre_registrado', 'en_revision', 'confirmado', 'rechazado', 'lista_espera'];
-  const [participantes, { data: facturas }] = await Promise.all([
+  const [participantes, { data: facturas }, { data: consentLog }] = await Promise.all([
     Promise.all(estados.map((e) => supabase.from('gpmd_participants').select('*', { count: 'exact', head: true }).eq('estado', e))),
     supabase.from('gpmd_facturas').select('estado, created_at, agente, razon_social, cliente, ciudad_pdv, departamento, presentacion, cantidad, valor_total, razon_rechazo'),
+    supabase.from('gpmd_log').select('accion').eq('entidad', 'consentimiento'),
   ]);
+
+  const autorizo = (consentLog || []).filter((l) => l.accion === 'autorizo').length;
+  const noAutorizo = (consentLog || []).filter((l) => l.accion === 'no_autorizo').length;
 
   const porEstado = {};
   estados.forEach((e, i) => { porEstado[e] = participantes[i].count || 0; });
@@ -71,6 +75,7 @@ router.get('/', requireAuth(['admin', 'cliente']), async (req, res) => {
       departamento: agrupar(aprobadas, 'departamento'),
     },
     por_presentacion: Object.values(pres).sort((a, b) => b.facturas - a.facturas),
+    consentimiento: { autorizo, no_autorizo: noAutorizo },
     facturas_diarias,
     causas_rechazo: Object.entries(causas).map(([causa, n]) => ({ causa, n })).sort((a, b) => b.n - a.n),
   });

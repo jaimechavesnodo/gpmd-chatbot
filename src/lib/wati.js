@@ -17,6 +17,23 @@ async function sendSessionMessage(phone, message) {
   return data;
 }
 
+// Enviar botones interactivos nativos de WhatsApp (quick-reply). `whatsappNumber`
+// va como query param (no en el path, a diferencia de sendSessionMessage). Cada
+// texto de botón debe ser corto (WhatsApp limita a 20 caracteres). Al tocar un
+// botón, WhatsApp reenvía su texto como un mensaje normal (tipo texto) al webhook,
+// así que se procesa igual que cualquier respuesta con las opciones existentes.
+async function sendInteractiveButtons(phone, body, buttonTexts) {
+  const url = `${BASE_URL}/api/v1/sendInteractiveButtonsMessage?whatsappNumber=${phone}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ body, buttons: buttonTexts.map((text) => ({ text })) }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (data.ok === false || data.result === false) console.warn(`[WATI] botones ${phone} →`, JSON.stringify(data).slice(0, 200));
+  return data;
+}
+
 // Enviar template (fuera de ventana de 24h)
 async function sendTemplateMessage(phone, templateName, params = []) {
   const url = `${BASE_URL}/api/v1/sendTemplateMessage?whatsappNumber=${phone}`;
@@ -66,4 +83,4 @@ async function downloadMedia(fileName) {
   return { buffer, contentType };
 }
 
-module.exports = { sendSessionMessage, sendTemplateMessage, downloadMedia, updateContactAttributes };
+module.exports = { sendSessionMessage, sendTemplateMessage, downloadMedia, updateContactAttributes, sendInteractiveButtons };

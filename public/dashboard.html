@@ -42,6 +42,13 @@
       </div>
     </div>
 
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;">
+      <div class="card card-pad">
+        <div class="card-title">Autorización de tratamiento de datos</div>
+        <div class="chart-box" style="height:160px;"><canvas id="chConsentimiento"></canvas></div>
+      </div>
+    </div>
+
     <div class="card card-pad" style="margin-bottom:1.25rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem;">
       <div class="card-title" style="margin:0;">Acumulados por dimensión — métrica:</div>
       <div class="metric-tabs" id="metricTabs">
@@ -96,6 +103,7 @@ async function cargar(){
 
   donut('chRegistros', ['Registros','Confirmados','En revisión','Rechazados'],
     [d.registros, e.confirmado, e.en_revision, e.rechazado]);
+  donut('chConsentimiento', ['Autorizan','No autorizan'], [d.consentimiento.autorizo, d.consentimiento.no_autorizo]);
   line('chDiario', d.facturas_diarias.map(x=>x.fecha), d.facturas_diarias.map(x=>x.n), 'Facturas/día');
   bar('chPres', d.por_presentacion.map(p=>p.label), d.por_presentacion.map(p=>p.facturas), '# Facturas');
   bar('chCausas', d.causas_rechazo.map(c=>CAUSA_LABEL[c.causa]||c.causa), d.causas_rechazo.map(c=>c.n), 'Rechazos');

@@ -3,6 +3,7 @@
 const supabase = require('./supabase');
 const wati = require('./wati');
 const ocr = require('./ocr');
+const { logActivity } = require('../middleware/logger');
 
 const TIPO_DOC = ['Cédula', 'Pasaporte', 'Otro'];
 const RH = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
@@ -10,6 +11,14 @@ const LIMITE_CONFIRMADOS = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150
 
 // Texto reutilizable para cuando la factura pasa a validación manual (incluye horario)
 const MSG_EN_REVISION = 'Un asesor la validará: el proceso puede tardar entre *1 y 3 horas* en horario *lunes a viernes de 8:00am a 6:00pm* y *sábados de 8:00am a 1:00pm*. Apenas sea validada te avisamos por aquí. ⏳';
+
+// ---------- Autorización de tratamiento de datos personales (primer mensaje) ----------
+const CONSENT_BOTONES = ['Sí, autorizo', 'No autorizo'];
+const MSG_CONSENTIMIENTO = '📋 *Autorización de Tratamiento de Datos Personales*\n\n'
+  + 'Antes de continuar con tu preinscripción al *Gran Premio Mobil Delvac 2026*, necesitamos tu autorización.\n\n'
+  + 'TERPEL S.A. (Responsable) y NODO LABS S.A.S. (Encargado tecnológico) recolectarán tus datos (nombre, documento, celular, correo, RH e imagen de tu factura) para gestionar tu preinscripción, validar tu participación y contactarte durante el proceso, conforme a la Ley 1581 de 2012.\n\n'
+  + 'Puedes conocer, actualizar, rectificar o revocar tus datos en cualquier momento.\n\n'
+  + '¿Autorizas el tratamiento de tus datos personales?';
 
 // ---------- Pasos del registro (en orden) ----------
 // tras 'email' (último campo del piloto) se crea el participante 'pre_registrado'.
@@ -116,15 +125,34 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
       return responderSegunEstado(phone, part, conv, send);
     }
 
-    await send(phone,
-      '🏁 *¡Bienvenido al Gran Premio Mobil Delvac 2026!* 🚛\n\n'
-      + 'Te ayudaré con tu *preregistro*. Te haré unas preguntas y al final subirás la *foto de tu factura* de compra de producto Mobil Delvac participante.\n\n'
-      + 'Tu cupo quedará *confirmado* cuando validemos la factura.\n\n'
-      + 'En cualquier momento puedes escribir *reiniciar*.');
-    const first = nextStep(0, conv.data);
-    await saveConv(phone, { step: `reg:${first.field}`, data: conv.data });
-    await send(phone, preguntar(first));
+    // Nuevo usuario (o reinicio): primero pedir autorización de tratamiento de datos
+    await saveConv(phone, { step: 'consentimiento', data: {} });
+    conv.step = 'consentimiento'; conv.data = {};
+    await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES);
     return conv;
+  }
+
+  // --- CONSENTIMIENTO DE TRATAMIENTO DE DATOS ---
+  if (conv.step === 'consentimiento') {
+    if (!text) { await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES); return conv; }
+
+    const op = parseOpcion(text, CONSENT_BOTONES);
+    if (!op) {
+      await send(phone, '⚠️ Por favor selecciona una de las opciones:');
+      await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES);
+      return conv;
+    }
+
+    if (op === CONSENT_BOTONES[1]) { // "No autorizo"
+      await logActivity({ entidad: 'consentimiento', entidadId: phone, accion: 'no_autorizo', detalle: { phone }, fuente: 'automatico' });
+      await saveConv(phone, { step: 'inicio', data: {} });
+      await send(phone, 'Entendido. Sin tu autorización no podemos continuar con la preinscripción. Si cambias de opinión, escríbenos de nuevo cuando quieras. ¡Gracias! 🙏');
+      return conv;
+    }
+
+    // "Sí, autorizo"
+    await logActivity({ entidad: 'consentimiento', entidadId: phone, accion: 'autorizo', detalle: { phone }, fuente: 'automatico' });
+    return iniciarRegistro(phone, conv, send);
   }
 
   // --- RECOLECCIÓN DE DATOS ---
@@ -184,6 +212,20 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
     return responderSegunEstado(phone, part, conv, send);
   }
 
+  return conv;
+}
+
+// Envía el mensaje de bienvenida y arranca el bloque de preguntas del piloto.
+async function iniciarRegistro(phone, conv, send) {
+  await send(phone,
+    '🏁 *¡Bienvenido al Gran Premio Mobil Delvac 2026!* 🚛\n\n'
+    + 'Te ayudaré con tu *preregistro*. Te haré unas preguntas y al final subirás la *foto de tu factura* de compra de producto Mobil Delvac participante.\n\n'
+    + 'Tu cupo quedará *confirmado* cuando validemos la factura.\n\n'
+    + 'En cualquier momento puedes escribir *reiniciar*.');
+  const first = nextStep(0, conv.data);
+  await saveConv(phone, { step: `reg:${first.field}`, data: conv.data });
+  conv.step = `reg:${first.field}`;
+  await send(phone, preguntar(first));
   return conv;
 }
 
