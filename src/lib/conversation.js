@@ -17,15 +17,16 @@ const LIMITE_CONFIRMADOS = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150
 const MSG_EN_REVISION = 'Un asesor la validará: el proceso puede tardar entre *1 y 3 horas* en horario *lunes a viernes de 8:00am a 6:00pm* y *sábados de 8:00am a 1:00pm*. Apenas sea validada te avisamos por aquí. ⏳';
 
 // ---------- Autorización de tratamiento de datos personales (primer mensaje) ----------
+// Nota: este tenant de WATI no renderiza botones nativos de WhatsApp vía
+// sendInteractiveButtonsMessage (la API responde "ok" pero WhatsApp entrega el
+// mensaje como texto plano con lista numerada). Se usa el mismo patrón de
+// opciones numeradas ya probado en el resto del bot, vía el `send` inyectado.
 const CONSENT_BOTONES = ['Sí, autorizo', 'No autorizo'];
-const MSG_CONSENTIMIENTO = '📋 *Autorización de Tratamiento de Datos Personales*\n\n'
-  + 'Antes de continuar con tu preinscripción al *Gran Premio Mobil Delvac 2026*, necesitamos tu autorización.\n\n'
-  + 'TERPEL S.A. (Responsable) y NODO LABS S.A.S. (Encargado tecnológico) recolectarán tus datos (nombre, documento, celular, correo, RH e imagen de tu factura) para gestionar tu preinscripción, validar tu participación y contactarte durante el proceso, conforme a la Ley 1581 de 2012.\n\n'
-  + 'Puedes conocer, actualizar, rectificar o revocar tus datos en cualquier momento.\n\n'
-  + '¿Autorizas el tratamiento de tus datos personales?';
+const MSG_CONSENTIMIENTO = 'Para continuar debes leer y aceptar la *Autorización para el Tratamiento de Datos Personales* de la Organización TERPEL S.A. (documento adjunto arriba).\n\n'
+  + formatOpciones(CONSENT_BOTONES) + '\n\nResponde con el número.';
 
-// Envía el PDF de Términos y Condiciones (solo la primera vez) + la pregunta con botones.
-async function enviarConsentimiento(phone, { incluirPdf = true } = {}) {
+// Envía el PDF de Términos y Condiciones (solo la primera vez) + la pregunta.
+async function enviarConsentimiento(phone, send, { incluirPdf = true } = {}) {
   if (incluirPdf) {
     try {
       const buffer = fs.readFileSync(PDF_AUTORIZACION);
@@ -35,7 +36,7 @@ async function enviarConsentimiento(phone, { incluirPdf = true } = {}) {
       console.error('[GPMD] no se pudo enviar el PDF de autorización:', e.message);
     }
   }
-  await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES);
+  await send(phone, MSG_CONSENTIMIENTO);
 }
 
 // ---------- Pasos del registro (en orden) ----------
@@ -146,18 +147,18 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
     // Nuevo usuario (o reinicio): primero pedir autorización de tratamiento de datos
     await saveConv(phone, { step: 'consentimiento', data: {} });
     conv.step = 'consentimiento'; conv.data = {};
-    await enviarConsentimiento(phone);
+    await enviarConsentimiento(phone, send);
     return conv;
   }
 
   // --- CONSENTIMIENTO DE TRATAMIENTO DE DATOS ---
   if (conv.step === 'consentimiento') {
-    if (!text) { await enviarConsentimiento(phone, { incluirPdf: false }); return conv; }
+    if (!text) { await enviarConsentimiento(phone, send, { incluirPdf: false }); return conv; }
 
     const op = parseOpcion(text, CONSENT_BOTONES);
     if (!op) {
       await send(phone, '⚠️ Por favor selecciona una de las opciones:');
-      await enviarConsentimiento(phone, { incluirPdf: false });
+      await enviarConsentimiento(phone, send, { incluirPdf: false });
       return conv;
     }
 
