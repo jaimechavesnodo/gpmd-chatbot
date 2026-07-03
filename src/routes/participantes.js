@@ -61,18 +61,66 @@ router.get('/:id', requireAuth(['admin', 'cliente', 'agente', 'consulta']), asyn
   res.json({ ...data, factura: ultimaFactura(data) });
 });
 
-// PATCH /api/participantes/:id — editar datos opcionales (cambios de último momento)
-const EDITABLES = ['vehiculo_marca', 'vehiculo_placa'];
+// PATCH /api/participantes/:id — editar datos del piloto y opcionales
+const EDITABLES = ['nombre_piloto', 'cedula', 'tipo_documento_piloto', 'novato', 'rh', 'vehiculo_marca', 'vehiculo_placa'];
 router.patch('/:id', requireAuth(['admin', 'agente']), async (req, res) => {
   const patch = {};
   for (const k of EDITABLES) if (k in req.body) patch[k] = req.body[k];
   if (!Object.keys(patch).length) return res.status(400).json({ error: 'Nada para actualizar' });
+
+  if ('nombre_piloto' in patch && !String(patch.nombre_piloto || '').trim()) return res.status(400).json({ error: 'El nombre no puede quedar vacío' });
+  if ('cedula' in patch) {
+    patch.cedula = String(patch.cedula || '').replace(/\s/g, '');
+    if (!patch.cedula) return res.status(400).json({ error: 'El documento no puede quedar vacío' });
+  }
+  if ('tipo_documento_piloto' in patch && patch.tipo_documento_piloto && !TIPO_DOC.includes(patch.tipo_documento_piloto)) {
+    return res.status(400).json({ error: 'Tipo de documento inválido' });
+  }
+  if ('rh' in patch && patch.rh && !RH.includes(patch.rh)) return res.status(400).json({ error: 'RH inválido' });
+  if ('novato' in patch) patch.novato = patch.novato === true || patch.novato === 'true';
+
   patch.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase.from('gpmd_participants').update(patch).eq('id', req.params.id).select().single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'Ya existe otro participante con ese documento' });
+    return res.status(500).json({ error: error.message });
+  }
   await logActivity({ entidad: 'participants', entidadId: req.params.id, accion: 'editado_manual', detalle: patch, usuarioId: req.user.id });
   res.json(data);
+});
+
+// Borra en cascada: imágenes en storage, facturas, conversación y el participante.
+async function borrarParticipanteCascada(id) {
+  const { data: files } = await supabase.storage.from('facturas').list(id, { limit: 1000 });
+  if (files && files.length) await supabase.storage.from('facturas').remove(files.map((f) => `${id}/${f.name}`));
+  await supabase.from('gpmd_facturas').delete().eq('participant_id', id);
+  const { data: p } = await supabase.from('gpmd_participants').select('phone').eq('id', id).maybeSingle();
+  if (p?.phone) await supabase.from('gpmd_conversaciones').delete().eq('phone', p.phone);
+  return supabase.from('gpmd_participants').delete().eq('id', id);
+}
+
+// DELETE /api/participantes/bulk — eliminar varios seleccionados (registrar ANTES de /:id)
+router.delete('/bulk', requireAuth(['admin', 'agente']), async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (!ids.length) return res.status(400).json({ error: 'No hay registros seleccionados' });
+
+  let eliminados = 0;
+  const errores = [];
+  for (const id of ids) {
+    const { error } = await borrarParticipanteCascada(id);
+    if (error) errores.push({ id, error: error.message }); else eliminados++;
+  }
+  await logActivity({ entidad: 'participants', entidadId: 'bulk', accion: 'eliminado_bulk', detalle: { eliminados, errores: errores.length, ids }, usuarioId: req.user.id });
+  res.json({ eliminados, errores });
+});
+
+// DELETE /api/participantes/:id — eliminar un solo registro
+router.delete('/:id', requireAuth(['admin', 'agente']), async (req, res) => {
+  const { error } = await borrarParticipanteCascada(req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  await logActivity({ entidad: 'participants', entidadId: req.params.id, accion: 'eliminado', detalle: {}, usuarioId: req.user.id });
+  res.json({ ok: true });
 });
 
 // POST /api/participantes — alta manual 1-a-1 (cupo confirmado sin factura)

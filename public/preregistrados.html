@@ -38,11 +38,21 @@
     <div class="table-wrap">
       <div class="table-header">
         <h2>Listado <span class="badge badge-gris" id="countBadge" style="margin-left:.4rem;"></span></h2>
-        <button class="btn btn-secondary btn-sm" onclick="cargar()">↻ Actualizar</button>
+        <div style="display:flex;gap:.5rem;">
+          <button class="btn btn-secondary btn-sm" id="btnModoEdicion" style="display:none;" onclick="toggleModoEdicion()">✏️ Editar</button>
+          <button class="btn btn-secondary btn-sm" onclick="cargar()">↻ Actualizar</button>
+        </div>
+      </div>
+      <div id="bulkBar" style="display:none;gap:.6rem;padding:.6rem 1rem;background:#fef2f2;border-bottom:1px solid var(--line);align-items:center;">
+        <span id="bulkCount" style="font-size:.85rem;font-weight:700;">0 seleccionados</span>
+        <button class="btn btn-primary btn-sm" style="background:#dc2626;border-color:#dc2626;" onclick="eliminarSeleccionados()" id="btnEliminarSel" disabled>🗑️ Eliminar seleccionados</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleModoEdicion()">Cancelar</button>
+        <span class="muted" style="font-size:.78rem;">Haz clic en una fila para editar sus datos.</span>
       </div>
       <div style="overflow-x:auto;">
         <table>
           <thead><tr>
+            <th id="thCheck" style="display:none;width:2rem;"><input type="checkbox" onclick="toggleTodos(this)"/></th>
             <th>Piloto</th><th>Documento</th><th>Tipo</th><th>Estado</th><th>Factura</th><th>Código</th><th>Registro</th>
           </tr></thead>
           <tbody id="tbody"></tbody>
@@ -93,10 +103,14 @@ const ESTADOS = [
 ];
 const LABEL = { pre_registrado:'Pre Registrado', en_revision:'En Revisión', confirmado:'Confirmado', rechazado:'Rechazado', lista_espera:'Lista de espera' };
 
+let modoEdicion = false, seleccionados = new Set();
+const puedeEditar = () => ['admin','agente'].includes(getUser()?.rol);
+
 async function init(){
   const u = requireRole(['admin','cliente','agente','consulta']); if(!u) return;
   renderSidebar('preregistrados'); renderFiltros();
   if(u.rol==='admin') document.getElementById('toolbarManual').style.display='flex';
+  if(puedeEditar()) document.getElementById('btnModoEdicion').style.display='inline-flex';
   await cargar();
 }
 
@@ -121,6 +135,9 @@ function render(){
   document.getElementById('empty').style.display = data.length ? 'none' : 'block';
   tb.innerHTML = data.map(p => `
     <tr style="cursor:pointer" onclick="ver('${p.id}')">
+      <td style="display:${modoEdicion?'table-cell':'none'};" onclick="event.stopPropagation()">
+        <input type="checkbox" ${seleccionados.has(p.id)?'checked':''} onchange="toggleSeleccion('${p.id}', this.checked)"/>
+      </td>
       <td><strong>${p.nombre_piloto||'—'}</strong></td>
       <td>${p.tipo_documento_piloto?p.tipo_documento_piloto[0]:''} ${p.cedula||''}</td>
       <td>${p.novato?'Novato':'No novato'}</td>
@@ -136,19 +153,112 @@ function ver(id){
   const p = data.find(x=>x.id===id); if(!p) return;
   document.getElementById('mTitulo').textContent = p.nombre_piloto || 'Participante';
   const f = p.factura;
-  document.getElementById('mBody').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem 1rem;font-size:.86rem;margin-bottom:1rem;">
-      ${campo('Estado', `<span class="badge badge-${p.estado}">${LABEL[p.estado]||p.estado}</span>`)}
-      ${campo('Código', p.codigo_preregistro)}
-      ${campo('Documento', `${p.tipo_documento_piloto||''} ${p.cedula||''}`)}
-      ${campo('Novato', p.novato?'Sí':'No')}
-      ${campo('RH', p.rh)}
-      ${campo('Celular', p.phone)}
-    </div>
-    <div style="display:flex;gap:.6rem;margin-top:1rem;align-items:center;">
-      ${f&&f.imagen_url?`<a class="btn btn-secondary btn-sm" href="${f.imagen_url}" target="_blank">Ver factura ↗</a>`:''}
-    </div>`;
+
+  if(modoEdicion && puedeEditar()){
+    document.getElementById('mBody').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:1rem;">
+        <div class="form-group"><label class="form-label">Nombre completo del piloto *</label><input class="form-control" id="e_nombre_piloto" value="${(p.nombre_piloto||'').replace(/"/g,'&quot;')}"/></div>
+        <div class="form-group"><label class="form-label">Tipo de documento</label>
+          <select class="form-control" id="e_tipo_documento_piloto">
+            <option value="" ${!p.tipo_documento_piloto?'selected':''}>—</option>
+            <option ${p.tipo_documento_piloto==='Cédula'?'selected':''}>Cédula</option>
+            <option ${p.tipo_documento_piloto==='Pasaporte'?'selected':''}>Pasaporte</option>
+            <option ${p.tipo_documento_piloto==='Otro'?'selected':''}>Otro</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Número de documento *</label><input class="form-control" id="e_cedula" value="${(p.cedula||'').replace(/"/g,'&quot;')}"/></div>
+        <div class="form-group"><label class="form-label">Novato</label>
+          <select class="form-control" id="e_novato">
+            <option value="false" ${!p.novato?'selected':''}>No novato</option>
+            <option value="true" ${p.novato?'selected':''}>Novato</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">RH</label>
+          <select class="form-control" id="e_rh">
+            <option value="" ${!p.rh?'selected':''}>—</option>
+            ${['O+','O-','A+','A-','B+','B-','AB+','AB-'].map(r=>`<option ${p.rh===r?'selected':''}>${r}</option>`).join('')}
+          </select></div>
+      </div>
+      <div style="display:flex;gap:.6rem;margin-top:1rem;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="guardarEdicion('${p.id}')">💾 Guardar cambios</button>
+        <button class="btn btn-primary btn-sm" style="background:#dc2626;border-color:#dc2626;" onclick="eliminarUno('${p.id}')">🗑️ Eliminar este registro</button>
+        ${f&&f.imagen_url?`<a class="btn btn-secondary btn-sm" href="${f.imagen_url}" target="_blank">Ver factura ↗</a>`:''}
+      </div>`;
+  } else {
+    document.getElementById('mBody').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem 1rem;font-size:.86rem;margin-bottom:1rem;">
+        ${campo('Estado', `<span class="badge badge-${p.estado}">${LABEL[p.estado]||p.estado}</span>`)}
+        ${campo('Código', p.codigo_preregistro)}
+        ${campo('Documento', `${p.tipo_documento_piloto||''} ${p.cedula||''}`)}
+        ${campo('Novato', p.novato?'Sí':'No')}
+        ${campo('RH', p.rh)}
+        ${campo('Celular', p.phone)}
+      </div>
+      <div style="display:flex;gap:.6rem;margin-top:1rem;align-items:center;">
+        ${f&&f.imagen_url?`<a class="btn btn-secondary btn-sm" href="${f.imagen_url}" target="_blank">Ver factura ↗</a>`:''}
+      </div>`;
+  }
   document.getElementById('modal').classList.add('show');
+}
+
+// ---- Modo edición / selección múltiple ----
+function toggleModoEdicion(){
+  modoEdicion = !modoEdicion;
+  seleccionados.clear();
+  document.getElementById('thCheck').style.display = modoEdicion ? 'table-cell' : 'none';
+  document.getElementById('bulkBar').style.display = modoEdicion ? 'flex' : 'none';
+  actualizarBulkUI();
+  render();
+}
+
+function toggleTodos(chk){
+  if(chk.checked) data.forEach(p=>seleccionados.add(p.id));
+  else seleccionados.clear();
+  actualizarBulkUI();
+  render();
+}
+
+function toggleSeleccion(id, checked){
+  if(checked) seleccionados.add(id); else seleccionados.delete(id);
+  actualizarBulkUI();
+}
+
+function actualizarBulkUI(){
+  const n = seleccionados.size;
+  document.getElementById('bulkCount').textContent = `${n} seleccionado${n===1?'':'s'}`;
+  document.getElementById('btnEliminarSel').disabled = n===0;
+}
+
+async function eliminarSeleccionados(){
+  const ids = [...seleccionados];
+  if(!ids.length) return;
+  if(!confirm(`¿Eliminar definitivamente ${ids.length} registro(s)? Esta acción no se puede deshacer.`)) return;
+  const res = await apiFetch('api/participantes/bulk', { method:'DELETE', body: JSON.stringify({ ids }) });
+  const j = await res?.json();
+  if(res?.ok){
+    showToast(`Eliminados: ${j.eliminados}${j.errores.length?` · ${j.errores.length} error(es)`:''}`, j.errores.length?'':'ok');
+    seleccionados.clear(); actualizarBulkUI(); cargar();
+  } else showToast(j?.error||'No se pudo eliminar','error');
+}
+
+async function eliminarUno(id){
+  if(!confirm('¿Eliminar definitivamente este registro? Esta acción no se puede deshacer.')) return;
+  const res = await apiFetch(`api/participantes/${id}`, { method:'DELETE' });
+  const j = await res?.json();
+  if(res?.ok){ showToast('Registro eliminado','ok'); cerrarModal(); cargar(); }
+  else showToast(j?.error||'No se pudo eliminar','error');
+}
+
+async function guardarEdicion(id){
+  const body = {
+    nombre_piloto: val('e_nombre_piloto'),
+    tipo_documento_piloto: val('e_tipo_documento_piloto'),
+    cedula: val('e_cedula'),
+    novato: val('e_novato') === 'true',
+    rh: val('e_rh'),
+  };
+  const res = await apiFetch(`api/participantes/${id}`, { method:'PATCH', body: JSON.stringify(body) });
+  const j = await res?.json();
+  if(res?.ok){ showToast('Cambios guardados','ok'); cerrarModal(); cargar(); }
+  else showToast(j?.error||'No se pudo guardar','error');
 }
 const campo = (l,v)=>`<div><div class="kpi-label" style="font-size:.68rem">${l}</div><div>${v||'—'}</div></div>`;
 function cerrarModal(){ document.getElementById('modal').classList.remove('show'); }
