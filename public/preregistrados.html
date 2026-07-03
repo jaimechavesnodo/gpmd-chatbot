@@ -77,9 +77,6 @@
         <select class="form-control" id="m_novato"><option value="">—</option><option value="Si">Novato</option><option value="No">No novato</option></select></div>
       <div class="form-group"><label class="form-label">RH</label>
         <select class="form-control" id="m_rh"><option value="">—</option><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></div>
-      <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="m_email"/></div>
-      <div class="form-group"><label class="form-label">Nombre copiloto</label><input class="form-control" id="m_nombre_copiloto"/></div>
-      <div class="form-group"><label class="form-label">Doc. copiloto</label><input class="form-control" id="m_documento_copiloto"/></div>
       <div class="form-group"><label class="form-label">Vehículo (marca/modelo)</label><input class="form-control" id="m_vehiculo"/></div>
       <div class="form-group"><label class="form-label">Placa</label><input class="form-control" id="m_placa"/></div>
     </div>
@@ -102,7 +99,6 @@ async function init(){
   if(u.rol==='admin') document.getElementById('toolbarManual').style.display='flex';
   await cargar();
 }
-const esConsulta = () => (getUser()?.rol === 'consulta');
 
 function renderFiltros(){
   document.getElementById('filtros').innerHTML = ESTADOS.map(e =>
@@ -146,40 +142,23 @@ function ver(id){
       ${campo('Código', p.codigo_preregistro)}
       ${campo('Documento', `${p.tipo_documento_piloto||''} ${p.cedula||''}`)}
       ${campo('Novato', p.novato?'Sí':'No')}
-      ${campo('RH', p.rh)} ${campo('Email', p.email)}
+      ${campo('RH', p.rh)}
       ${campo('Celular', p.phone)}
     </div>
-    <div class="card-title">Copiloto${esConsulta()?'':' (editable)'}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
-      ${esConsulta()
-        ? campo('Copiloto',p.nombre_copiloto)+campo('Doc. copiloto',p.numero_documento_copiloto)
-        : input('e_nombre_copiloto','Nombre copiloto',p.nombre_copiloto)+input('e_numero_documento_copiloto','Doc. copiloto',p.numero_documento_copiloto)}
-    </div>
     <div style="display:flex;gap:.6rem;margin-top:1rem;align-items:center;">
-      ${esConsulta()?'':`<button class="btn btn-primary btn-sm" onclick="guardarEdit('${p.id}')">Guardar cambios</button>`}
       ${f&&f.imagen_url?`<a class="btn btn-secondary btn-sm" href="${f.imagen_url}" target="_blank">Ver factura ↗</a>`:''}
     </div>`;
   document.getElementById('modal').classList.add('show');
 }
 const campo = (l,v)=>`<div><div class="kpi-label" style="font-size:.68rem">${l}</div><div>${v||'—'}</div></div>`;
-const input = (id,l,v)=>`<div class="form-group" style="margin:0"><label class="form-label">${l}</label><input class="form-control" id="${id}" value="${v||''}"/></div>`;
 function cerrarModal(){ document.getElementById('modal').classList.remove('show'); }
-
-async function guardarEdit(id){
-  const body = {
-    nombre_copiloto: val('e_nombre_copiloto'), numero_documento_copiloto: val('e_numero_documento_copiloto'),
-  };
-  const res = await apiFetch(`api/participantes/${id}`, { method:'PATCH', body: JSON.stringify(body) });
-  if(res&&res.ok){ showToast('Datos actualizados','ok'); cerrarModal(); cargar(); }
-  else showToast('No se pudo guardar','error');
-}
 const val = id => document.getElementById(id)?.value || '';
 
 // ---- Ingreso manual ----
-const COLS = ['nombre_piloto','tipo_documento','numero_documento','novato','rh','email','nombre_copiloto','documento_copiloto','vehiculo','placa'];
+const COLS = ['nombre_piloto','tipo_documento','numero_documento','novato','rh','vehiculo','placa'];
 
 function abrirManual(){
-  ['m_nombre_piloto','m_cedula','m_email','m_nombre_copiloto','m_documento_copiloto','m_vehiculo','m_placa'].forEach(id=>document.getElementById(id).value='');
+  ['m_nombre_piloto','m_cedula','m_vehiculo','m_placa'].forEach(id=>document.getElementById(id).value='');
   ['m_tipo_documento_piloto','m_novato','m_rh'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('modalManual').classList.add('show');
 }
@@ -188,8 +167,7 @@ function cerrarManual(){ document.getElementById('modalManual').classList.remove
 async function guardarManual(){
   const body = {
     nombre_piloto: val('m_nombre_piloto'), tipo_documento_piloto: val('m_tipo_documento_piloto'),
-    cedula: val('m_cedula'), novato: val('m_novato'), rh: val('m_rh'), email: val('m_email'),
-    nombre_copiloto: val('m_nombre_copiloto'), documento_copiloto: val('m_documento_copiloto'),
+    cedula: val('m_cedula'), novato: val('m_novato'), rh: val('m_rh'),
     vehiculo: val('m_vehiculo'), placa: val('m_placa'),
   };
   if(!body.nombre_piloto || !body.cedula){ showToast('Nombre y documento son obligatorios','error'); return; }
@@ -202,7 +180,7 @@ async function guardarManual(){
 }
 
 function descargarPlantilla(){
-  const ws = XLSX.utils.aoa_to_sheet([COLS, ['Juan Pérez','Cédula','1098765432','Si','O+','juan@correo.com','Ana Gómez','1122334455','Kenworth T800','ABC123']]);
+  const ws = XLSX.utils.aoa_to_sheet([COLS, ['Juan Pérez','Cédula','1098765432','Si','O+','Kenworth T800','ABC123']]);
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Cupos');
   XLSX.writeFile(wb, 'plantilla-cupos-gpmd.xlsx');
 }

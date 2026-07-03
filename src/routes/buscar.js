@@ -12,8 +12,8 @@ router.get('/', requireAuth(['admin', 'agente', 'cliente', 'consulta']), async (
   const { data, error } = await supabase
     .from('gpmd_participants')
     .select(`
-      id, nombre_piloto, cedula, tipo_documento_piloto, novato, rh, email, phone,
-      nombre_copiloto, vehiculo_marca, vehiculo_placa, codigo_preregistro, estado, created_at,
+      id, nombre_piloto, cedula, tipo_documento_piloto, novato, rh, phone,
+      vehiculo_marca, vehiculo_placa, codigo_preregistro, estado, created_at,
       facturas:gpmd_facturas ( id, estado, cliente, nit, referencia_producto, presentacion, valor_total, imagen_url, ocr_motivo_revision, created_at )
     `)
     .or(`nombre_piloto.ilike.${like},cedula.ilike.${like},vehiculo_placa.ilike.${like},codigo_preregistro.ilike.${like}`)

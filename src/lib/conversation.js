@@ -17,16 +17,21 @@ const LIMITE_CONFIRMADOS = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150
 const MSG_EN_REVISION = 'Un asesor la validará: el proceso puede tardar entre *1 y 3 horas* en horario *lunes a viernes de 8:00am a 6:00pm* y *sábados de 8:00am a 1:00pm*. Apenas sea validada te avisamos por aquí. ⏳';
 
 // ---------- Autorización de tratamiento de datos personales (primer mensaje) ----------
-// Nota: este tenant de WATI no renderiza botones nativos de WhatsApp vía
-// sendInteractiveButtonsMessage (la API responde "ok" pero WhatsApp entrega el
-// mensaje como texto plano con lista numerada). Se usa el mismo patrón de
-// opciones numeradas ya probado en el resto del bot, vía el `send` inyectado.
+// Nota diagnóstica: el endpoint GET /getMessages de WATI no devuelve
+// `interactiveData` para mensajes ya entregados (aunque hayan sido botones
+// reales), así que ese campo NO sirve para confirmar si algo se renderizó
+// como botón — hay que verificar visualmente en el dispositivo. Confirmado
+// con captura real: sendInteractiveButtonsMessage SÍ renderiza botones
+// táctiles nativos en este tenant.
 const CONSENT_BOTONES = ['Sí, autorizo', 'No autorizo'];
-const MSG_CONSENTIMIENTO = 'Para continuar debes leer y aceptar la *Autorización para el Tratamiento de Datos Personales* de la Organización TERPEL S.A. (documento adjunto arriba).\n\n'
-  + formatOpciones(CONSENT_BOTONES) + '\n\nResponde con el número.';
+const MSG_CONSENTIMIENTO = '📋 *Autorización de Tratamiento de Datos Personales*\n\n'
+  + 'Antes de continuar con tu preinscripción al *Gran Premio Mobil Delvac 2026*, necesitamos tu autorización.\n\n'
+  + 'TERPEL S.A. recolectará tus datos (nombre, documento, celular, RH e imagen de tu factura) para gestionar tu preinscripción, validar tu participación y contactarte durante el proceso, conforme a la Ley 1581 de 2012.\n\n'
+  + 'Puedes conocer, actualizar, rectificar o revocar tus datos en cualquier momento.\n\n'
+  + '¿Autorizas el tratamiento de tus datos personales?';
 
-// Envía el PDF de Términos y Condiciones (solo la primera vez) + la pregunta.
-async function enviarConsentimiento(phone, send, { incluirPdf = true } = {}) {
+// Envía el PDF de Términos y Condiciones (solo la primera vez) + la pregunta con botones.
+async function enviarConsentimiento(phone, { incluirPdf = true } = {}) {
   if (incluirPdf) {
     try {
       const buffer = fs.readFileSync(PDF_AUTORIZACION);
@@ -36,11 +41,11 @@ async function enviarConsentimiento(phone, send, { incluirPdf = true } = {}) {
       console.error('[GPMD] no se pudo enviar el PDF de autorización:', e.message);
     }
   }
-  await send(phone, MSG_CONSENTIMIENTO);
+  await wati.sendInteractiveButtons(phone, MSG_CONSENTIMIENTO, CONSENT_BOTONES);
 }
 
 // ---------- Pasos del registro (en orden) ----------
-// tras 'email' (último campo del piloto) se crea el participante 'pre_registrado'.
+// tras 'rh' (último campo del piloto) se crea el participante 'pre_registrado'.
 const STEPS = [
   { field: 'nombre_piloto',
     q: 'Para empezar, ¿cuál es tu *nombre y apellidos completos* (piloto)?',
@@ -55,26 +60,8 @@ const STEPS = [
     validate: (v) => (v.replace(/\s/g, '').length >= 4 ? null : 'Escribe un número de documento válido:'),
     normalize: (v) => v.replace(/\s/g, '') },
   { field: 'rh', opciones: RH,
-    q: '¿Cuál es tu *grupo sanguíneo y RH*?' },
-  { field: 'email',
-    q: '¿Cuál es tu *correo electrónico*?',
-    validate: (v) => (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim()) ? null : 'Escribe un correo válido (ej: nombre@dominio.com):'),
-    normalize: (v) => v.trim(),
+    q: '¿Cuál es tu *grupo sanguíneo y RH*?',
     afterCreate: true },
-  // --- Copiloto (opcional) ---
-  { field: 'tiene_copiloto', opciones: ['Sí', 'No'], ephemeral: true,
-    q: '¿Vas a registrar un *copiloto*?',
-    normalize: (v) => v === 'Sí' },
-  { field: 'nombre_copiloto', skipIf: (d) => !d.tiene_copiloto,
-    q: 'Nombre y apellidos del *copiloto*:',
-    validate: (v) => (v.trim().length >= 3 ? null : 'Escribe el nombre del copiloto:') },
-  { field: 'tipo_documento_copiloto', opciones: TIPO_DOC, skipIf: (d) => !d.tiene_copiloto,
-    q: '*Tipo de documento* del copiloto:' },
-  { field: 'numero_documento_copiloto', skipIf: (d) => !d.tiene_copiloto,
-    q: '*Número de documento* del copiloto:',
-    normalize: (v) => v.replace(/\s/g, '') },
-  { field: 'rh_copiloto', opciones: RH, skipIf: (d) => !d.tiene_copiloto,
-    q: '*RH* del copiloto:' },
 ];
 
 function parseOpcion(text, opciones) {
@@ -147,18 +134,17 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
     // Nuevo usuario (o reinicio): primero pedir autorización de tratamiento de datos
     await saveConv(phone, { step: 'consentimiento', data: {} });
     conv.step = 'consentimiento'; conv.data = {};
-    await enviarConsentimiento(phone, send);
+    await enviarConsentimiento(phone);
     return conv;
   }
 
   // --- CONSENTIMIENTO DE TRATAMIENTO DE DATOS ---
   if (conv.step === 'consentimiento') {
-    if (!text) { await enviarConsentimiento(phone, send, { incluirPdf: false }); return conv; }
+    if (!text) { await enviarConsentimiento(phone, { incluirPdf: false }); return conv; }
 
     const op = parseOpcion(text, CONSENT_BOTONES);
     if (!op) {
-      await send(phone, '⚠️ Por favor selecciona una de las opciones:');
-      await enviarConsentimiento(phone, send, { incluirPdf: false });
+      await enviarConsentimiento(phone, { incluirPdf: false });
       return conv;
     }
 
@@ -287,7 +273,7 @@ async function crearParticipante(phone, d) {
   const row = {
     phone, cedula: d.cedula, nombre_piloto: d.nombre_piloto,
     tipo_documento_piloto: d.tipo_documento_piloto, novato: !!d.novato,
-    rh: d.rh, email: d.email, codigo_preregistro: codigo, estado: 'pre_registrado',
+    rh: d.rh, codigo_preregistro: codigo, estado: 'pre_registrado',
   };
   const { error } = await supabase.from('gpmd_participants').upsert(row, { onConflict: 'phone' }).select('id').single();
   if (error) {
@@ -298,18 +284,8 @@ async function crearParticipante(phone, d) {
   return null;
 }
 
-// Guarda datos opcionales (copiloto/vehículo) y pasa a pedir la factura.
+// Pasa a pedir la factura tras completar los datos del piloto.
 async function finalizarRegistro(phone, conv, send) {
-  const d = conv.data;
-  await supabase.from('gpmd_participants').update({
-    nombre_copiloto: d.nombre_copiloto || null,
-    tipo_documento_copiloto: d.tipo_documento_copiloto || null,
-    numero_documento_copiloto: d.numero_documento_copiloto || null,
-    rh_copiloto: d.rh_copiloto || null,
-    vehiculo_marca: d.vehiculo_marca || null,
-    vehiculo_placa: d.vehiculo_placa || null,
-  }).eq('phone', phone);
-
   await saveConv(phone, { step: 'factura' });
   conv.step = 'factura';
   await send(phone, '📸 *Último paso:* envíame la *foto (o el PDF) de tu factura* de compra del producto Mobil Delvac participante. Asegúrate de que se vea clara, completa y legible.');

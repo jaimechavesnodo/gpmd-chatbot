@@ -23,9 +23,6 @@ function filaAParticipante(b) {
   return {
     row: {
       nombre_piloto: nombre, cedula, tipo_documento_piloto: tipoDoc, novato, rh,
-      email: (b.email || '').toString().trim() || null,
-      nombre_copiloto: (b.nombre_copiloto || '').toString().trim() || null,
-      numero_documento_copiloto: (b.documento_copiloto || b.numero_documento_copiloto || '').toString().replace(/\s/g, '') || null,
       vehiculo_marca: (b.vehiculo || b.vehiculo_marca || '').toString().trim() || null,
       vehiculo_placa: (b.placa || b.vehiculo_placa || '').toString().replace(/\s/g, '').toUpperCase() || null,
       codigo_preregistro: genCodigo(), estado: 'confirmado', origen: 'manual',
@@ -34,8 +31,7 @@ function filaAParticipante(b) {
 }
 
 const SELECT = `
-  id, nombre_piloto, cedula, tipo_documento_piloto, novato, rh, email, phone,
-  nombre_copiloto, tipo_documento_copiloto, numero_documento_copiloto, rh_copiloto,
+  id, nombre_piloto, cedula, tipo_documento_piloto, novato, rh, phone,
   vehiculo_marca, vehiculo_placa, codigo_preregistro, estado, created_at, updated_at,
   facturas:gpmd_facturas ( id, estado, cliente, nit, referencia_producto, presentacion, valor_total, ocr_confianza, imagen_url, created_at )
 `;
@@ -66,7 +62,7 @@ router.get('/:id', requireAuth(['admin', 'cliente', 'agente', 'consulta']), asyn
 });
 
 // PATCH /api/participantes/:id — editar datos opcionales (cambios de último momento)
-const EDITABLES = ['nombre_copiloto', 'tipo_documento_copiloto', 'numero_documento_copiloto', 'rh_copiloto', 'vehiculo_marca', 'vehiculo_placa', 'email'];
+const EDITABLES = ['vehiculo_marca', 'vehiculo_placa'];
 router.patch('/:id', requireAuth(['admin', 'agente']), async (req, res) => {
   const patch = {};
   for (const k of EDITABLES) if (k in req.body) patch[k] = req.body[k];

@@ -65,7 +65,7 @@ function ficha(p){
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.4rem 1rem;font-size:.86rem;margin-top:.8rem;">
       ${campo('Código', p.codigo_preregistro)} ${campo('Novato', p.novato?'Sí':'No')} ${campo('RH', p.rh)}
-      ${campo('Email', p.email)} ${campo('Copiloto', p.nombre_copiloto)} ${campo('Placa', p.vehiculo_placa)}
+      ${campo('Placa', p.vehiculo_placa)}
     </div>
     ${facturaBlock}
   </div>`;
