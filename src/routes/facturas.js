@@ -106,9 +106,18 @@ router.patch('/:id/rechazar', requireAuth(['admin', 'agente']), async (req, res)
 
   if (error) return res.status(500).json({ error: error.message });
 
-  await supabase.from('gpmd_participants').update({ estado: 'rechazado', updated_at: new Date().toISOString() }).eq('id', data.participant_id);
-  await logActivity({ entidad: 'facturas', entidadId: req.params.id, accion: 'manual_rechazado', detalle: { razon_rechazo }, usuarioId: req.user.id });
-  await notificarRechazado(data.participant, razon_rechazo, razon_rechazo_detalle).catch((e) => console.error('[GPMD] notif:', e.message));
+  // No tumbar a un piloto que YA tiene otra factura aprobada (ej. reenvío duplicado
+  // que se rechaza después de auditar) — solo se marca rechazado si esta era su
+  // única/última factura vigente.
+  const { data: otraAprobada } = await supabase
+    .from('gpmd_facturas').select('id').eq('participant_id', data.participant_id)
+    .in('estado', ['aprobada_auto', 'aprobada_manual', 'aprobada_valor']).neq('id', req.params.id).limit(1).maybeSingle();
+
+  if (!otraAprobada) {
+    await supabase.from('gpmd_participants').update({ estado: 'rechazado', updated_at: new Date().toISOString() }).eq('id', data.participant_id);
+    await notificarRechazado(data.participant, razon_rechazo, razon_rechazo_detalle).catch((e) => console.error('[GPMD] notif:', e.message));
+  }
+  await logActivity({ entidad: 'facturas', entidadId: req.params.id, accion: 'manual_rechazado', detalle: { razon_rechazo, participante_ya_confirmado: !!otraAprobada }, usuarioId: req.user.id });
 
   res.json({ ok: true, data });
 });

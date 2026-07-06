@@ -4,7 +4,7 @@ const supabase = require('../lib/supabase');
 const { requireAuth } = require('../middleware/auth');
 
 const LIMITE = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150;
-const APROBADAS = ['aprobada_auto', 'aprobada_manual'];
+const APROBADAS = ['aprobada_auto', 'aprobada_manual', 'aprobada_valor'];
 
 // Agrega facturas aprobadas por una dimensión: { label: {monto, facturas, cantidad} }
 function agrupar(facturas, campo) {
@@ -63,6 +63,7 @@ router.get('/', requireAuth(['admin', 'cliente']), async (req, res) => {
       recibidas: facts.length,
       aprobada_auto: conteoEstado.aprobada_auto || 0,
       aprobada_manual: conteoEstado.aprobada_manual || 0,
+      aprobada_valor: conteoEstado.aprobada_valor || 0,
       en_revision: conteoEstado.en_revision || 0,
       rechazada: conteoEstado.rechazada || 0,
     },

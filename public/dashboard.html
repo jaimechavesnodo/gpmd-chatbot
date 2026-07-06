@@ -99,7 +99,7 @@ async function cargar(){
   ].join('');
   document.getElementById('cupoTxt').textContent = `${d.cupo.confirmados} / ${d.cupo.limite}`;
   document.getElementById('cupoBar').style.width = Math.min(100, d.cupo.confirmados/d.cupo.limite*100)+'%';
-  document.getElementById('cupoSub').textContent = `${d.cupo.disponibles} cupos disponibles · auto ${d.facturas.aprobada_auto} · manual ${d.facturas.aprobada_manual} · en revisión ${d.facturas.en_revision}`;
+  document.getElementById('cupoSub').textContent = `${d.cupo.disponibles} cupos disponibles · auto ${d.facturas.aprobada_auto} · por valor ${d.facturas.aprobada_valor} · manual ${d.facturas.aprobada_manual} · en revisión ${d.facturas.en_revision}`;
 
   donut('chRegistros', ['Registros','Confirmados','En revisión','Rechazados'],
     [d.registros, e.confirmado, e.en_revision, e.rechazado]);
