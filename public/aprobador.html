@@ -79,7 +79,10 @@
           <div class="split-divider" id="splitDivider" title="Arrastra para ajustar"></div>
           <div class="split-right">
            <div class="factura-form-panel">
-            <div class="card-title">Establecimiento (PDV)</div>
+            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+              Establecimiento (PDV)
+              <button class="btn btn-secondary btn-sm" onclick="abrirNuevoPdv()">➕ Nuevo PDV</button>
+            </div>
             <div class="form-group" style="position:relative;">
               <label class="form-label">NIT o cliente — escribe para buscar *</label>
               <input class="form-control" id="f_pdv_search" autocomplete="off" placeholder="Escribe el NIT del emisor o el nombre del cliente…" oninput="buscarPdv(this.value)" onfocus="buscarPdv(this.value)"/>
@@ -141,6 +144,26 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- Modal: nuevo PDV -->
+<div class="modal-overlay" id="modalPdv">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarNuevoPdv()">✕</button>
+    <h2>Nuevo punto de venta (PDV)</h2>
+    <p class="muted" style="font-size:.82rem;margin-bottom:1rem;">Todos los campos son obligatorios. Al guardar, queda disponible de inmediato para esta y futuras facturas.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
+      <div class="form-group"><label class="form-label">NIT *</label><input class="form-control" id="np_nit"/></div>
+      <div class="form-group"><label class="form-label">Cliente *</label><input class="form-control" id="np_cliente"/></div>
+      <div class="form-group"><label class="form-label">Agente *</label><input class="form-control" id="np_agente"/></div>
+      <div class="form-group"><label class="form-label">Departamento *</label><input class="form-control" id="np_departamento"/></div>
+      <div class="form-group"><label class="form-label">Ciudad *</label><input class="form-control" id="np_ciudad"/></div>
+      <div class="form-group"><label class="form-label">Canal *</label><input class="form-control" id="np_canal"/></div>
+      <div class="form-group"><label class="form-label">Razón Social *</label><input class="form-control" id="np_razon_social"/></div>
+      <div class="form-group"><label class="form-label">Dirección *</label><input class="form-control" id="np_direccion"/></div>
+    </div>
+    <div style="margin-top:1rem;"><button class="btn btn-primary" id="npBtn" onclick="guardarNuevoPdv()">Guardar PDV</button></div>
+  </div>
 </div>
 
 <script src="assets/js/auth.js"></script>
@@ -238,6 +261,35 @@ async function abrir(id){
 }
 
 // Buscador con autocompletar por NIT o cliente. Si autoCliente viene, preselecciona esa coincidencia.
+// ---- Nuevo PDV (cuando el NIT de la factura no tiene ningún punto de venta registrado) ----
+const PDV_CAMPOS = ['nit','cliente','agente','departamento','ciudad','canal','razon_social','direccion'];
+function abrirNuevoPdv(){
+  PDV_CAMPOS.forEach(c=>document.getElementById('np_'+c).value='');
+  document.getElementById('np_nit').value = document.getElementById('f_pdv_search').value.replace(/\D/g,'') || (actual?.nit || '');
+  document.getElementById('modalPdv').classList.add('show');
+}
+function cerrarNuevoPdv(){ document.getElementById('modalPdv').classList.remove('show'); }
+
+async function guardarNuevoPdv(){
+  const body = {}; let faltante = null;
+  for (const c of PDV_CAMPOS) {
+    body[c] = document.getElementById('np_'+c).value.trim();
+    if (!body[c] && !faltante) faltante = c;
+  }
+  if (faltante) { showToast('Todos los campos son obligatorios','error'); return; }
+
+  const btn = document.getElementById('npBtn'); btn.disabled = true; btn.textContent = 'Guardando...';
+  const res = await apiFetch('api/pdv', { method:'POST', body: JSON.stringify(body) });
+  const j = await res?.json();
+  if (res?.ok) {
+    showToast('PDV agregado', 'ok');
+    cerrarNuevoPdv();
+    document.getElementById('f_pdv_search').value = body.nit;
+    await buscarPdv(body.nit, body.cliente);
+  } else showToast(j?.error || 'No se pudo guardar', 'error');
+  btn.disabled = false; btn.textContent = 'Guardar PDV';
+}
+
 async function buscarPdv(q, autoCliente){
   q = (q||'').trim();
   const sug = document.getElementById('pdvSug');

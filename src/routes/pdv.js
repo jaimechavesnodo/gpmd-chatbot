@@ -2,7 +2,10 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
 const { requireAuth } = require('../middleware/auth');
+const { logActivity } = require('../middleware/logger');
 const { nitCoincide } = require('../lib/ocr');
+
+const CAMPOS_OBLIGATORIOS = ['nit', 'cliente', 'agente', 'departamento', 'ciudad', 'canal', 'razon_social', 'direccion'];
 
 // GET /api/pdv?q=...    → autocompletar por NIT (prefijo) o nombre de cliente (para el aprobador)
 // GET /api/pdv?nit=...  → clientes que coinciden exactamente con ese NIT
@@ -29,14 +32,23 @@ router.get('/', requireAuth(['admin', 'agente', 'cliente']), async (req, res) =>
   res.json(rows);
 });
 
-// CRUD mínimo (admin) — para agregar PDV más adelante
-router.post('/', requireAuth(['admin']), async (req, res) => {
-  const { nit, cliente, agente, departamento, ciudad } = req.body;
-  if (!cliente) return res.status(400).json({ error: 'cliente requerido' });
-  const { data, error } = await supabase.from('gpmd_pdv')
-    .insert({ nit: nit || null, cliente, agente, departamento, ciudad }).select().single();
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+// POST /api/pdv — alta de un PDV (usada también desde el popup del Aprobador
+// cuando el NIT de una factura no tiene ningún punto de venta registrado)
+router.post('/', requireAuth(['admin', 'agente']), async (req, res) => {
+  const row = {};
+  for (const campo of CAMPOS_OBLIGATORIOS) {
+    const val = (req.body[campo] || '').toString().trim();
+    if (!val) return res.status(400).json({ error: `El campo "${campo}" es obligatorio` });
+    row[campo] = val;
+  }
+
+  const { data, error } = await supabase.from('gpmd_pdv').insert(row).select().single();
+  if (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'Ya existe un PDV con ese NIT y Cliente' });
+    return res.status(500).json({ error: error.message });
+  }
+  await logActivity({ entidad: 'pdv', entidadId: data.id, accion: 'alta_manual', detalle: row, usuarioId: req.user.id });
+  res.status(201).json(data);
 });
 
 router.patch('/:id', requireAuth(['admin']), async (req, res) => {
