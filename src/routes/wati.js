@@ -21,7 +21,10 @@ router.post('/', async (req, res) => {
     // Solo procesar mensajes entrantes del usuario (no salientes ni eventos de estado)
     const evento = b.eventType || '';
     const esEntrante = b.owner === false || /received/i.test(evento);
-    if (!esEntrante) return;
+    if (!esEntrante) {
+      console.warn(`[WATI webhook] descartado (no parece entrante) eventType="${evento}" owner=${b.owner} waId=${b.waId || b.whatsappNumber || b.phone || ''}`);
+      return;
+    }
 
     const phone = b.waId || b.whatsappNumber || b.phone || '';
     if (!phone) return;

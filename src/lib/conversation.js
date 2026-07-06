@@ -88,14 +88,17 @@ function genCodigo() {
 
 // ---------- Persistencia de conversación ----------
 async function loadConv(phone) {
-  const { data } = await supabase.from('gpmd_conversaciones').select('*').eq('phone', phone).maybeSingle();
+  const { data, error: e1 } = await supabase.from('gpmd_conversaciones').select('*').eq('phone', phone).maybeSingle();
+  if (e1) console.error(`[conversation] error leyendo conversación ${phone}:`, e1.message);
   if (data) return data;
   const nuevo = { phone, step: 'inicio', data: {} };
-  await supabase.from('gpmd_conversaciones').insert(nuevo);
+  const { error: e2 } = await supabase.from('gpmd_conversaciones').insert(nuevo);
+  if (e2) console.error(`[conversation] error creando conversación ${phone}:`, e2.message);
   return nuevo;
 }
 async function saveConv(phone, patch) {
-  await supabase.from('gpmd_conversaciones').update(patch).eq('phone', phone);
+  const { error } = await supabase.from('gpmd_conversaciones').update(patch).eq('phone', phone);
+  if (error) console.error(`[conversation] error guardando conversación ${phone}:`, error.message);
 }
 function stepIndex(field) { return STEPS.findIndex((s) => s.field === field); }
 function nextStep(fromIdx, data) {
@@ -378,4 +381,4 @@ async function subirImagen(buffer, contentType, participantId) {
   return supabase.storage.from('facturas').getPublicUrl(p).data?.publicUrl || null;
 }
 
-module.exports = { processIncoming, STEPS };
+module.exports = { processIncoming, STEPS, crearParticipante, procesarFactura, loadConv, saveConv };
