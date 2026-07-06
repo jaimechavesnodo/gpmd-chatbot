@@ -23,6 +23,14 @@ const anthropic = new Anthropic({
 const UMBRAL = () => parseFloat(process.env.OCR_CONFIANZA_MINIMA) || 0.70;       // producto vs catálogo
 const UMBRAL_NIT = () => parseFloat(process.env.OCR_NIT_CONFIANZA_MINIMA) || 0.75; // NIT + Cliente
 
+// Segunda vía de auto-aprobación (a pedido de Jaime, jul/2026): si el criterio
+// normal no se cumple pero las líneas "Mobil Delvac Modern" suman un valor alto
+// y el NIT se identifica (aunque el cliente sea ambiguo), se aprueba igual para
+// no frenar cupos por casos de match de producto/cliente débil — queda marcada
+// como 'aprobada_valor' para auditar después en el Aprobador.
+const VALOR_MINIMO = () => parseFloat(process.env.OCR_VALOR_MINIMO) || 500000;
+const VALOR_FECHA_MIN = () => process.env.OCR_VALOR_FECHA_MIN || '2026-07-03';
+
 // ---------- Catálogos (cacheados en memoria, refrescables) ----------
 let _catalogo = null, _pdvs = null, _cacheAt = 0;
 const CACHE_MS = 5 * 60 * 1000;
@@ -64,7 +72,9 @@ const USER_TEXT = 'Devuelve un JSON con: nit (NIT del emisor, string solo con el
   + 'presentacion (Balde, Granel, Galon, Cuartos u Otro), cantidad (numero), valor_total (numero sin simbolos ni puntos de miles), '
   + 'match_confianza (0.0-1.0, que tan seguro estas del mapeo al catalogo), nit_confianza (0.0-1.0, que tan seguro estas de haber leido bien el NIT del emisor), '
   + 'confianza (0.0-1.0, legibilidad general). '
-  + 'Si hay varias lineas Mobil Delvac participantes, reporta la de mayor valor_total.';
+  + 'Si hay varias lineas Mobil Delvac participantes, reporta la de mayor valor_total en los campos anteriores. '
+  + 'ADEMAS, incluye "lineas_mobil_delvac": un array con TODAS las lineas Mobil Delvac participantes que encuentres en la '
+  + 'factura (puede haber mas de una, ej. distintas presentaciones), cada una como { "producto_catalogo": "...", "valor_total": numero }.';
 
 // ---------- OCR + evaluación ----------
 // Las facturas pueden llegar como imagen (foto de WhatsApp) o como PDF
@@ -130,6 +140,23 @@ function evaluar(ocr) {
   if (!productoOk) razones.push(`Producto/presentación no confirmados (match ${Math.round(matchConf * 100)}%)`);
   if (!fechaOk) razones.push('Fecha de compra no legible');
 
+  // ---- Segunda vía: auto-aprobación por VALOR de líneas "Mobil Delvac Modern" ----
+  let pasaAutoValor = false, valorModernSum = 0;
+  if (!pasaAuto) {
+    const lineas = Array.isArray(ocr.lineas_mobil_delvac) ? ocr.lineas_mobil_delvac : [];
+    const lineasModern = lineas.filter((l) => /modern/i.test(l?.producto_catalogo || ''));
+    valorModernSum = lineasModern.reduce((sum, l) => sum + (parseFloat(l.valor_total) || 0), 0);
+    if (!lineasModern.length && /modern/i.test(ocr.producto_catalogo || '')) valorModernSum = parseFloat(ocr.valor_total) || 0;
+
+    const nitOkValor = matches.length > 0 && nitConf >= minNit;
+    const fechaOkValor = fechaOk && ocr.fecha_compra > VALOR_FECHA_MIN();
+    pasaAutoValor = valorModernSum >= VALOR_MINIMO() && nitOkValor && fechaOkValor;
+    if (pasaAutoValor) {
+      razones.length = 0;
+      razones.push(`Aprobada automáticamente por valor: líneas Mobil Delvac Modern suman $${valorModernSum.toLocaleString('es-CO')} — auditar cliente/datos`);
+    }
+  }
+
   // Canal/Razón Social: informativos, derivados del PDV resuelto (no editables)
   const fila = pdvUnico || null;
   return {
@@ -137,6 +164,7 @@ function evaluar(ocr) {
     confianza,
     matchConfianza: matchConf,
     nitConfianza: nitConf,
+    valorModernSum,
     pdv: {
       candidatos: matches,                 // para el dropdown del aprobador (incluyen canal/razon_social)
       pdv_id: fila ? fila.id : null,
@@ -148,8 +176,9 @@ function evaluar(ocr) {
       razon_social: fila ? fila.razon_social : null,
     },
     pasaAuto,
-    motivo: pasaAuto ? null : razones.join('; '),
-    estado: pasaAuto ? 'aprobada_auto' : 'en_revision',
+    pasaAutoValor,
+    motivo: (pasaAuto || pasaAutoValor) ? (pasaAutoValor ? razones.join('; ') : null) : razones.join('; '),
+    estado: pasaAuto ? 'aprobada_auto' : pasaAutoValor ? 'aprobada_valor' : 'en_revision',
   };
 }
 

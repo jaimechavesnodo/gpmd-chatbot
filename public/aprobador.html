@@ -46,8 +46,14 @@
 
     <div style="display:grid;grid-template-columns:280px 1fr;gap:1.25rem;align-items:start;">
       <div class="table-wrap" style="position:sticky;top:1rem;max-height:calc(100vh - 120px);overflow-y:auto;">
-        <div class="table-header"><h2>Cola <span id="colaBadge" class="badge badge-rojo" style="margin-left:.3rem;"></span></h2>
-          <button class="btn btn-secondary btn-sm" onclick="cargarCola()">↻</button></div>
+        <div class="table-header">
+          <h2 id="colaTitulo">Cola <span id="colaBadge" class="badge badge-rojo" style="margin-left:.3rem;"></span></h2>
+          <button class="btn btn-secondary btn-sm" onclick="cargarCola()">↻</button>
+        </div>
+        <div style="display:flex;gap:.4rem;padding:.6rem 1rem;border-bottom:1px solid var(--line);">
+          <div class="chip active" id="tabCola" onclick="cambiarVista('cola')">Cola <span id="colaBadgeTab" class="badge badge-rojo"></span></div>
+          <div class="chip" id="tabValor" onclick="cambiarVista('valor')">Aprobadas por Valor <span id="valorBadgeTab" class="badge badge-verde"></span></div>
+        </div>
         <div id="colaList"></div>
       </div>
 
@@ -135,18 +141,46 @@
 
 <script src="assets/js/auth.js"></script>
 <script>
-let cola=[], actual=null, decision=null, zoomLevel=1, selectedPdv=null, sugTimer=null, sugRows=[];
+let cola=[], colaCount=0, valorCount=0, vistaActual='cola', actual=null, decision=null, zoomLevel=1, selectedPdv=null, sugTimer=null, sugRows=[];
 
-async function init(){ requireRole(['admin','agente']); renderSidebar('aprobador'); await cargarCola(); initSplitter(); }
+async function init(){
+  requireRole(['admin','agente']); renderSidebar('aprobador');
+  await Promise.all([cargarConteoValor(), cargarCola()]);
+  initSplitter();
+}
+
+function cambiarVista(v){
+  if(v===vistaActual) return;
+  vistaActual = v;
+  document.getElementById('tabCola').classList.toggle('active', v==='cola');
+  document.getElementById('tabValor').classList.toggle('active', v==='valor');
+  document.getElementById('colaTitulo').firstChild.textContent = v==='cola' ? 'Cola ' : 'Aprobadas por Valor ';
+  actual=null;
+  document.getElementById('aprobadorPanel').style.display='none';
+  document.getElementById('emptyState').style.display='block';
+  cargarCola();
+}
+
+async function cargarConteoValor(){
+  const res = await apiFetch('api/facturas/aprobadas-valor'); if(!res) return;
+  valorCount = (await res.json()).length;
+  document.getElementById('valorBadgeTab').textContent = valorCount;
+}
 
 async function cargarCola(){
-  const res = await apiFetch('api/facturas/pendientes'); if(!res) return;
-  cola = await res.json(); renderCola();
+  const endpoint = vistaActual==='cola' ? 'api/facturas/pendientes' : 'api/facturas/aprobadas-valor';
+  const res = await apiFetch(endpoint); if(!res) return;
+  cola = await res.json();
+  if(vistaActual==='cola') colaCount = cola.length; else valorCount = cola.length;
+  document.getElementById('colaBadgeTab').textContent = colaCount;
+  document.getElementById('valorBadgeTab').textContent = valorCount;
+  renderCola();
 }
 function renderCola(){
   document.getElementById('colaBadge').textContent = cola.length;
   const el = document.getElementById('colaList');
-  if(!cola.length){ el.innerHTML='<div class="empty" style="padding:2rem 1rem"><div class="big">✅</div>Cola vacía</div>'; return; }
+  const vacio = vistaActual==='cola' ? 'Cola vacía' : 'Sin facturas aprobadas por valor';
+  if(!cola.length){ el.innerHTML=`<div class="empty" style="padding:2rem 1rem"><div class="big">✅</div>${vacio}</div>`; return; }
   el.innerHTML = cola.map(f=>`
     <div class="queue-item" id="qi_${f.id}" onclick="abrir('${f.id}')">
       <img class="thumb" src="${f.imagen_url}" onerror="this.style.visibility='hidden'"/>
@@ -175,7 +209,13 @@ async function abrir(id){
   setVal('f_valor_total', actual.ocr_valor_total);
 
   const mb = document.getElementById('motivoBox');
-  if(actual.ocr_motivo_revision){ mb.style.display='block'; mb.textContent='⚠️ '+actual.ocr_motivo_revision; } else mb.style.display='none';
+  const esValor = actual.estado==='aprobada_valor';
+  if(actual.ocr_motivo_revision){
+    mb.style.display='block'; mb.textContent=(esValor?'✅ ':'⚠️ ')+actual.ocr_motivo_revision;
+    mb.style.background = esValor ? 'var(--green-bg)' : '';
+    mb.style.color = esValor ? '#15803d' : '';
+    mb.style.borderColor = esValor ? 'var(--green)' : '';
+  } else { mb.style.display='none'; mb.style.background=''; mb.style.color=''; mb.style.borderColor=''; }
 
   // Reset del buscador de PDV y precarga con el NIT leído por OCR
   selectedPdv = null;

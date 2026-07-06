@@ -39,6 +39,23 @@ router.get('/pendientes', requireAuth(['admin', 'agente']), async (req, res) => 
   res.json(data);
 });
 
+// GET /api/facturas/aprobadas-valor — facturas auto-aprobadas por valor (líneas Mobil Delvac
+// Modern ≥ mínimo), pendientes de auditar/corregir por un humano
+router.get('/aprobadas-valor', requireAuth(['admin', 'agente']), async (req, res) => {
+  const { data, error } = await supabase
+    .from('gpmd_facturas')
+    .select(`
+      id, imagen_url, estado, created_at, nit, cliente, agente, departamento, ciudad_pdv, canal, razon_social,
+      ocr_establecimiento, ocr_fecha_compra, ocr_referencia_producto, producto_catalogo,
+      ocr_presentacion, ocr_cantidad, ocr_valor_total, ocr_confianza, match_confianza, ocr_motivo_revision,
+      participant:participant_id ( id, nombre_piloto, cedula, phone, codigo_preregistro )
+    `)
+    .eq('estado', 'aprobada_valor')
+    .order('created_at');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // GET /api/facturas/:id — detalle completo
 router.get('/:id', requireAuth(['admin', 'agente']), async (req, res) => {
   const { data, error } = await supabase

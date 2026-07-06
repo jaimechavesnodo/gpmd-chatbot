@@ -328,6 +328,7 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
   }
 
   const o = r.ocr;
+  const autoAprobada = r.pasaAuto || r.pasaAutoValor;
   await guardarFactura(part.id, {
     imagen_url: imagenUrl || mediaFileName, ocr_raw: o,
     ocr_establecimiento: o.establecimiento || null, ocr_fecha_compra: o.fecha_compra || null,
@@ -338,18 +339,18 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     departamento: r.pdv.departamento, ciudad_pdv: r.pdv.ciudad,
     canal: r.pdv.canal, razon_social: r.pdv.razon_social,
     producto_catalogo: o.producto_catalogo || null, match_confianza: r.matchConfianza,
-    establecimiento: r.pasaAuto ? o.establecimiento || null : null,
-    fecha_compra: r.pasaAuto ? o.fecha_compra || null : null,
-    referencia_producto: r.pasaAuto ? o.producto_catalogo || null : null,
-    presentacion: r.pasaAuto ? o.presentacion || null : null,
-    cantidad: r.pasaAuto ? o.cantidad || null : null,
-    valor_total: r.pasaAuto ? o.valor_total || null : null,
+    establecimiento: autoAprobada ? o.establecimiento || null : null,
+    fecha_compra: autoAprobada ? o.fecha_compra || null : null,
+    referencia_producto: autoAprobada ? o.producto_catalogo || null : null,
+    presentacion: autoAprobada ? o.presentacion || null : null,
+    cantidad: autoAprobada ? o.cantidad || null : null,
+    valor_total: autoAprobada ? o.valor_total || null : null,
     estado: r.estado,
   });
 
   await saveConv(phone, { step: 'completo' }); conv.step = 'completo';
 
-  if (!r.pasaAuto) {
+  if (!autoAprobada) {
     await supabase.from('gpmd_participants').update({ estado: 'en_revision' }).eq('id', part.id);
     await send(phone, `📩 Recibí tu factura. ${MSG_EN_REVISION}`);
     return conv;
