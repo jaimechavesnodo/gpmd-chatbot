@@ -311,6 +311,24 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     await send(phone, '⚠️ No pude descargar tu imagen. Por favor envíala de nuevo.');
     return conv;
   }
+
+  // 1.b Validar que el archivo llegó completo y no es un placeholder/bookmark roto
+  // (visto en la práctica: PDFs compartidos desde iCloud/Files sin descargar en el
+  // iPhone del remitente llegan como un "bplist" de ~200 bytes en vez del PDF real).
+  if (!archivoValido(buffer, contentType)) {
+    console.warn(`[GPMD] archivo dañado/incompleto de ${phone} (${buffer.length} bytes, contentType=${contentType})`);
+    const urlRoto = await subirImagen(buffer, contentType, part.id); // se guarda igual, para poder auditar qué llegó
+    await guardarFactura(part.id, {
+      imagen_url: urlRoto || mediaFileName,
+      ocr_motivo_revision: 'Archivo dañado o incompleto al llegar (no es un PDF/imagen válido) — pedir reenvío',
+      estado: 'en_revision',
+    });
+    await supabase.from('gpmd_participants').update({ estado: 'en_revision' }).eq('id', part.id);
+    await saveConv(phone, { step: 'completo' }); conv.step = 'completo';
+    await send(phone, '⚠️ Tu archivo llegó dañado o incompleto (esto pasa a veces con PDFs compartidos desde iCloud/Archivos sin descargar). Por favor envíame la factura de nuevo, si puede ser como *foto* mejor que como PDF.');
+    return conv;
+  }
+
   // 2. Guardar imagen (no bloquea)
   const imagenUrl = await subirImagen(buffer, contentType, part.id);
 
@@ -372,6 +390,15 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
 
 async function guardarFactura(participantId, campos) {
   await supabase.from('gpmd_facturas').insert({ participant_id: participantId, ...campos });
+}
+
+// Verifica que el buffer descargado sea realmente un PDF/imagen y no un
+// placeholder roto (ej. bookmark de iOS de ~200 bytes en vez del PDF real).
+function archivoValido(buffer, contentType) {
+  if (!buffer || buffer.length < 500) return false;
+  if ((contentType || '').includes('pdf')) return buffer.slice(0, 5).toString('latin1') === '%PDF-';
+  const hex = buffer.slice(0, 4).toString('hex');
+  return hex.startsWith('ffd8ff') || hex === '89504e47' || hex.startsWith('47494638') || hex.startsWith('52494646');
 }
 
 async function subirImagen(buffer, contentType, participantId) {

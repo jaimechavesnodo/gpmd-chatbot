@@ -65,7 +65,11 @@
           <div class="split-left">
            <div class="factura-viewer">
             <div class="factura-viewer-header">📷 Imagen de la Factura <span id="facturaId" style="font-size:.72rem;color:var(--muted-2);float:right;"></span></div>
-            <div class="factura-img-wrap" id="imgWrap"><img id="facturaImg" src="" alt="Factura" onclick="toggleZoom(this)"/></div>
+            <div class="factura-img-wrap" id="imgWrap">
+              <img id="facturaImg" src="" alt="Factura" onclick="toggleZoom(this)"/>
+              <iframe id="facturaPdf" src="" style="display:none;width:100%;height:100%;border:0;"></iframe>
+              <div id="facturaRoto" class="empty" style="display:none;padding:2rem 1rem;"><div class="big">⚠️</div>El archivo llegó dañado o incompleto (no se puede previsualizar). Pídele al piloto que lo reenvíe.</div>
+            </div>
             <div class="zoom-controls">
               <button onclick="zoom(-0.25)">−</button><button onclick="zoom(0)">100%</button><button onclick="zoom(0.25)">+</button>
               <a id="facturaLink" href="#" target="_blank" class="btn btn-secondary btn-sm" style="margin-left:auto;">Abrir ↗</a>
@@ -196,7 +200,7 @@ async function abrir(id){
   document.querySelectorAll('.queue-item').forEach(e=>e.classList.remove('selected'));
   document.getElementById(`qi_${id}`)?.classList.add('selected');
 
-  document.getElementById('facturaImg').src = actual.imagen_url;
+  mostrarVisor(actual.imagen_url, actual.ocr_motivo_revision);
   document.getElementById('facturaLink').href = actual.imagen_url;
   document.getElementById('facturaId').textContent = id.slice(0,8);
   zoomLevel=1; document.getElementById('facturaImg').style.transform='';
@@ -336,6 +340,19 @@ function reset(btn){ btn.disabled=false; btn.textContent='Guardar revisión'; }
 function siguiente(){ const i=cola.findIndex(f=>f.id===actual?.id); const n=cola[i+1]||cola[0]; if(n) abrir(n.id); }
 const v = id => document.getElementById(id)?.value || '';
 
+// Muestra la imagen, el PDF (en iframe, con el visor nativo del navegador) o el
+// aviso de archivo dañado, según corresponda. `motivo` viene de ocr_motivo_revision
+// (los archivos dañados se marcan con el texto "dañado o incompleto").
+function mostrarVisor(url, motivo){
+  const img = document.getElementById('facturaImg'), pdf = document.getElementById('facturaPdf'), roto = document.getElementById('facturaRoto');
+  const esRoto = /dañado o incompleto/i.test(motivo || '');
+  const esPdf = /\.pdf(\?|$)/i.test(url || '');
+  img.style.display = (!esRoto && !esPdf) ? 'block' : 'none';
+  pdf.style.display = (!esRoto && esPdf) ? 'block' : 'none';
+  roto.style.display = esRoto ? 'flex' : 'none';
+  img.src = (!esRoto && !esPdf) ? url : '';
+  pdf.src = (!esRoto && esPdf) ? url : '';
+}
 function zoom(d){ const img=document.getElementById('facturaImg'); if(d===0){zoomLevel=1;img.style.transform='';return;} zoomLevel=Math.max(.5,Math.min(4,zoomLevel+d)); img.style.transform=`scale(${zoomLevel})`; }
 function toggleZoom(img){ zoomLevel=zoomLevel>1?1:2; img.style.transform=zoomLevel>1?`scale(${zoomLevel})`:''; }
 function initSplitter(){
