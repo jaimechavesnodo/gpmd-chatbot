@@ -67,6 +67,7 @@ function buildSystem(catalogo) {
     + 'Responde SOLO con un JSON, sin markdown ni texto adicional.';
 }
 const USER_TEXT = 'Devuelve un JSON con: nit (NIT del emisor, string solo con el numero), establecimiento (razon social del emisor), '
+  + 'numero_factura (numero/folio/consecutivo de la factura, tal cual aparece impreso, o null si no es legible), '
   + 'fecha_compra (YYYY-MM-DD), producto_factura (texto crudo de la linea Mobil Delvac tal cual aparece), '
   + 'producto_catalogo (el item del catalogo que mejor corresponde, EXACTO como "Producto | Presentacion", o null si ninguno aplica), '
   + 'presentacion (Balde, Granel, Galon, Cuartos u Otro), cantidad (numero), valor_total (numero sin simbolos ni puntos de miles), '

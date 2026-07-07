@@ -295,6 +295,27 @@ async function finalizarRegistro(phone, conv, send) {
   return conv;
 }
 
+// Busca si OTRO participante ya tiene una factura (no rechazada) con el mismo NIT
+// y el mismo número de factura, o —si no hay número legible— el mismo NIT+fecha+valor.
+// Evita que se auto-aprueben dos veces la misma factura repartida entre varios pilotos.
+async function buscarPosibleDuplicado(o, participantId) {
+  if (!o.nit) return null;
+  let q = supabase.from('gpmd_facturas')
+    .select('participant_id, participant:participant_id (nombre_piloto, codigo_preregistro)')
+    .eq('nit', o.nit).neq('participant_id', participantId).neq('estado', 'rechazada');
+
+  if (o.numero_factura) {
+    q = q.eq('numero_factura', o.numero_factura);
+  } else if (o.fecha_compra && o.valor_total) {
+    q = q.eq('ocr_fecha_compra', o.fecha_compra).eq('ocr_valor_total', o.valor_total);
+  } else {
+    return null; // sin número ni fecha+valor no hay base confiable para comparar
+  }
+
+  const { data } = await q.limit(1).maybeSingle();
+  return data ? data.participant : null;
+}
+
 async function procesarFactura(phone, conv, mediaFileName, send) {
   await send(phone, '🔎 Recibí tu factura, dame un momento mientras la verifico...');
 
@@ -346,14 +367,23 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
   }
 
   const o = r.ocr;
-  const autoAprobada = r.pasaAuto || r.pasaAutoValor;
+
+  // Verificar posible factura duplicada de OTRO participante (mismo NIT + número de
+  // factura, o mismo NIT + fecha + valor) ANTES de dejar pasar cualquier auto-aprobación.
+  const dup = await buscarPosibleDuplicado(o, part.id);
+  const autoAprobada = (r.pasaAuto || r.pasaAutoValor) && !dup;
+  const estadoFinal = dup ? 'en_revision' : r.estado;
+  const motivoFinal = dup
+    ? `⚠️ Posible factura duplicada: mismo NIT${o.numero_factura ? ' y número de factura' : ' + fecha + valor'} que el registro ${dup.codigo_preregistro} (${dup.nombre_piloto || 'otro piloto'}) — verificar manualmente.`
+    : r.motivo;
+
   await guardarFactura(part.id, {
     imagen_url: imagenUrl || mediaFileName, ocr_raw: o,
     ocr_establecimiento: o.establecimiento || null, ocr_fecha_compra: o.fecha_compra || null,
     ocr_referencia_producto: o.producto_factura || null, ocr_presentacion: o.presentacion || null,
     ocr_cantidad: o.cantidad || null, ocr_valor_total: o.valor_total || null,
-    ocr_confianza: r.confianza, ocr_motivo_revision: r.motivo,
-    nit: o.nit || null, cliente: r.pdv.cliente, agente: r.pdv.agente,
+    ocr_confianza: r.confianza, ocr_motivo_revision: motivoFinal,
+    nit: o.nit || null, numero_factura: o.numero_factura || null, cliente: r.pdv.cliente, agente: r.pdv.agente,
     departamento: r.pdv.departamento, ciudad_pdv: r.pdv.ciudad,
     canal: r.pdv.canal, razon_social: r.pdv.razon_social,
     producto_catalogo: o.producto_catalogo || null, match_confianza: r.matchConfianza,
@@ -363,7 +393,7 @@ async function procesarFactura(phone, conv, mediaFileName, send) {
     presentacion: autoAprobada ? o.presentacion || null : null,
     cantidad: autoAprobada ? o.cantidad || null : null,
     valor_total: autoAprobada ? o.valor_total || null : null,
-    estado: r.estado,
+    estado: estadoFinal,
   });
 
   await saveConv(phone, { step: 'completo' }); conv.step = 'completo';
