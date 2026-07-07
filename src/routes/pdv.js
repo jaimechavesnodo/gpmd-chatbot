@@ -51,14 +51,16 @@ router.post('/', requireAuth(['admin', 'agente']), async (req, res) => {
   res.status(201).json(data);
 });
 
-router.patch('/:id', requireAuth(['admin']), async (req, res) => {
+router.patch('/:id', requireAuth(['admin', 'agente']), async (req, res) => {
   const { data, error } = await supabase.from('gpmd_pdv').update(req.body).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
+  await logActivity({ entidad: 'pdv', entidadId: data.id, accion: 'editado_manual', detalle: req.body, usuarioId: req.user.id });
   res.json(data);
 });
 
-router.delete('/:id', requireAuth(['admin']), async (req, res) => {
+router.delete('/:id', requireAuth(['admin', 'agente']), async (req, res) => {
   await supabase.from('gpmd_pdv').update({ activo: false }).eq('id', req.params.id);
+  await logActivity({ entidad: 'pdv', entidadId: req.params.id, accion: 'eliminado', detalle: {}, usuarioId: req.user.id });
   res.json({ ok: true });
 });
 

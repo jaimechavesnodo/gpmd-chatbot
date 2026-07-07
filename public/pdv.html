@@ -23,21 +23,24 @@
     <!-- PDV -->
     <div id="panel-pdv">
       <div class="card card-pad" style="margin-bottom:1rem;">
-        <div class="card-title">Agregar PDV</div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr) auto;gap:.5rem;align-items:end;">
-          <div class="form-group" style="margin:0"><label class="form-label">NIT</label><input class="form-control" id="p_nit"/></div>
+        <div class="card-title">Agregar PDV <span class="muted" style="font-size:.78rem;font-weight:400;">— todos los campos son obligatorios</span></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;">
+          <div class="form-group" style="margin:0"><label class="form-label">NIT *</label><input class="form-control" id="p_nit"/></div>
           <div class="form-group" style="margin:0"><label class="form-label">Cliente *</label><input class="form-control" id="p_cliente"/></div>
-          <div class="form-group" style="margin:0"><label class="form-label">Agente</label><input class="form-control" id="p_agente"/></div>
-          <div class="form-group" style="margin:0"><label class="form-label">Departamento</label><input class="form-control" id="p_dep"/></div>
-          <div class="form-group" style="margin:0"><label class="form-label">Ciudad</label><input class="form-control" id="p_ciudad"/></div>
-          <button class="btn btn-primary" onclick="addPdv()">Agregar</button>
+          <div class="form-group" style="margin:0"><label class="form-label">Agente *</label><input class="form-control" id="p_agente"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Departamento *</label><input class="form-control" id="p_dep"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Ciudad *</label><input class="form-control" id="p_ciudad"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Canal *</label><input class="form-control" id="p_canal"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Razón Social *</label><input class="form-control" id="p_razon_social"/></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Dirección *</label><input class="form-control" id="p_direccion"/></div>
         </div>
+        <button class="btn btn-primary" style="margin-top:.7rem;" onclick="addPdv()">Agregar</button>
       </div>
       <div class="table-wrap">
         <div class="table-header"><h2>PDV <span class="badge badge-gris" id="pdvCount"></span></h2>
           <input class="form-control" style="max-width:240px" id="pdvFiltro" placeholder="Filtrar por NIT/cliente…" oninput="renderPdv()"/></div>
         <div style="overflow-x:auto;max-height:60vh;overflow-y:auto;"><table>
-          <thead><tr><th>NIT</th><th>Cliente</th><th>Agente</th><th>Depto</th><th>Ciudad</th><th></th></tr></thead>
+          <thead><tr><th>NIT</th><th>Cliente</th><th>Agente</th><th>Depto</th><th>Ciudad</th><th>Canal</th><th>Razón Social</th><th>Dirección</th><th></th></tr></thead>
           <tbody id="pdvBody"></tbody></table></div>
       </div>
     </div>
@@ -67,7 +70,7 @@
 <script src="assets/js/auth.js"></script>
 <script>
 let pdv=[], prod=[];
-async function init(){ requireRole(['admin']); renderSidebar('pdv'); await Promise.all([loadPdv(),loadProd()]); }
+async function init(){ requireRole(['admin','agente']); renderSidebar('pdv'); await Promise.all([loadPdv(),loadProd()]); }
 
 function tab(t){
   document.getElementById('tab-pdv').classList.toggle('active', t==='pdv');
@@ -84,14 +87,16 @@ function renderPdv(){
   document.getElementById('pdvBody').innerHTML = rows.map(p=>`<tr>
     <td>${p.nit||'—'}</td><td><strong>${p.cliente}</strong></td><td>${p.agente||'—'}</td>
     <td>${p.departamento||'—'}</td><td>${p.ciudad||'—'}</td>
+    <td>${p.canal||'—'}</td><td>${p.razon_social||'—'}</td><td>${p.direccion||'—'}</td>
     <td><button class="btn btn-secondary btn-sm" onclick="delPdv(${p.id})">Eliminar</button></td></tr>`).join('');
 }
+const PDV_FORM_IDS = { nit:'p_nit', cliente:'p_cliente', agente:'p_agente', departamento:'p_dep', ciudad:'p_ciudad', canal:'p_canal', razon_social:'p_razon_social', direccion:'p_direccion' };
 async function addPdv(){
-  const body={ nit:v('p_nit'), cliente:v('p_cliente'), agente:v('p_agente'), departamento:v('p_dep'), ciudad:v('p_ciudad') };
-  if(!body.cliente){ showToast('Cliente requerido','error'); return; }
+  const body={}; for(const k in PDV_FORM_IDS) body[k]=v(PDV_FORM_IDS[k]);
   const r=await apiFetch('api/pdv',{method:'POST',body:JSON.stringify(body)});
-  if(r&&r.ok){ showToast('PDV agregado','ok'); ['p_nit','p_cliente','p_agente','p_dep','p_ciudad'].forEach(i=>document.getElementById(i).value=''); loadPdv(); }
-  else showToast('No se pudo agregar','error');
+  const j = await r?.json();
+  if(r&&r.ok){ showToast('PDV agregado','ok'); Object.values(PDV_FORM_IDS).forEach(i=>document.getElementById(i).value=''); loadPdv(); }
+  else showToast(j?.error||'No se pudo agregar','error');
 }
 async function delPdv(id){ const r=await apiFetch(`api/pdv/${id}`,{method:'DELETE'}); if(r&&r.ok){ showToast('Eliminado','ok'); loadPdv(); } }
 

@@ -45,7 +45,7 @@ function renderSidebar(activeKey) {
     { key: 'aprobador',      href: 'aprobador.html',      icon: '✅', label: 'Aprobador', roles: ['admin','agente'] },
     { key: 'buscar',         href: 'buscar.html',         icon: '🔎', label: 'Buscar', roles: ['admin','cliente','agente','consulta'] },
     { key: 'dashboard',      href: 'dashboard.html',      icon: '📊', label: 'Dashboard', roles: ['admin','cliente'] },
-    { key: 'pdv',            href: 'pdv.html',            icon: '🏪', label: 'PDV y Productos', roles: ['admin'] },
+    { key: 'pdv',            href: 'pdv.html',            icon: '🏪', label: 'PDV y Productos', roles: ['admin','agente'] },
     { key: 'log',            href: 'log.html',            icon: '🗒️', label: 'Log', roles: ['admin'] },
     { key: 'usuarios',       href: 'usuarios.html',       icon: '👥', label: 'Usuarios', roles: ['admin'] },
   ].filter(n => n.roles.includes(user.rol));
