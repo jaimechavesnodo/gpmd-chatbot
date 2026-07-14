@@ -16,6 +16,13 @@ const LIMITE_CONFIRMADOS = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150
 // Texto reutilizable para cuando la factura pasa a validación manual (incluye horario)
 const MSG_EN_REVISION = 'Un asesor la validará: el proceso puede tardar entre *1 y 3 horas* en horario *lunes a viernes de 8:00am a 6:00pm* y *sábados de 8:00am a 1:00pm*. Apenas sea validada te avisamos por aquí. ⏳';
 
+// Cierre de convocatoria (a pedido de Jaime, jul/2026): ya no se reciben preinscripciones
+// nuevas. Se controla por env var para poder reabrir sin tocar código si se habilitan más
+// cupos — solo aplica a gente NUEVA que escribe por primera vez; quien ya tenía preregistro
+// sigue su proceso normal (enviar factura, ver estado, etc.).
+const REGISTRO_CERRADO = () => (process.env.REGISTRO_CERRADO ?? 'true').toLowerCase() !== 'false';
+const MSG_CUPOS_COMPLETOS = '🏁 ¡Gracias por tu interés en el *Gran Premio Mobil Delvac 2026*!\n\nYa completamos el 100% de los cupos disponibles, así que por ahora no estamos recibiendo nuevas preinscripciones. Si se llegan a habilitar más cupos, nos comunicaremos contigo. ¡Gracias! 🙏';
+
 // ---------- Autorización de tratamiento de datos personales (primer mensaje) ----------
 // Nota diagnóstica: el endpoint GET /getMessages de WATI no devuelve
 // `interactiveData` para mensajes ya entregados (aunque hayan sido botones
@@ -132,6 +139,12 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
     // Usuario que regresa (ya tiene preregistro) y no pidió reiniciar → responder según su estado
     if (part && !forzarReinicio) {
       return responderSegunEstado(phone, part, conv, send);
+    }
+
+    // Usuario nuevo (sin preregistro previo) y la convocatoria está cerrada → avisar y no iniciar registro
+    if (!part && REGISTRO_CERRADO()) {
+      await send(phone, MSG_CUPOS_COMPLETOS);
+      return conv;
     }
 
     // Nuevo usuario (o reinicio): primero pedir autorización de tratamiento de datos
