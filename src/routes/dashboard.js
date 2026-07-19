@@ -6,11 +6,30 @@ const { requireAuth } = require('../middleware/auth');
 const LIMITE = () => parseInt(process.env.LIMITE_CONFIRMADOS) || 150;
 const APROBADAS = ['aprobada_auto', 'aprobada_manual', 'aprobada_valor'];
 
+// Normalización para los reportes de cierre (jul/2026, a pedido de Jaime): el mismo
+// agente/ciudad/departamento se escribió con mayúsculas/tildes/nombres distintos según
+// quién cargó el PDV — se unifica en mayúsculas y se agrupan los alias conocidos, solo
+// para efectos de estos gráficos (no se toca el dato original en gpmd_pdv/gpmd_facturas).
+const ALIAS_AGENTE = { 'COMPAÑIA DE LUBRICANTES': 'CIA LUBRICANTES' };
+const ALIAS_CIUDAD = {
+  TOCANCIPA: 'TOCANCIPÁ',
+  BOGOTA: 'BOGOTÁ',
+  UBATE: 'VILLA DE SAN DIEGO DE UBATÉ',
+  'VILLA DE SAN DIEGO UBATE': 'VILLA DE SAN DIEGO DE UBATÉ',
+};
+const ALIAS_DEPARTAMENTO = { BOG: 'BOGOTÁ', BOGOTA: 'BOGOTÁ' };
+
+function normalizarValor(valor, alias) {
+  const up = (valor || '—').trim().toUpperCase();
+  return alias[up] || up;
+}
+
 // Agrega facturas aprobadas por una dimensión: { label: {monto, facturas, cantidad} }
-function agrupar(facturas, campo) {
+function agrupar(facturas, campo, alias) {
   const m = {};
   for (const f of facturas) {
-    const k = (f[campo] || '—').trim() || '—';
+    const raw = (f[campo] || '—').trim() || '—';
+    const k = alias ? normalizarValor(raw, alias) : raw;
     if (!m[k]) m[k] = { label: k, monto: 0, facturas: 0, cantidad: 0 };
     m[k].monto += Number(f.valor_total) || 0;
     m[k].cantidad += Number(f.cantidad) || 0;
@@ -69,11 +88,11 @@ router.get('/', requireAuth(['admin', 'cliente']), async (req, res) => {
     },
     // Montos acumulados / facturas / cantidad por dimensión (sobre facturas aprobadas)
     por_dimension: {
-      agente: agrupar(aprobadas, 'agente'),
+      agente: agrupar(aprobadas, 'agente', ALIAS_AGENTE),
       razon_social: agrupar(aprobadas, 'razon_social'),
       cliente: agrupar(aprobadas, 'cliente'),
-      ciudad: agrupar(aprobadas, 'ciudad_pdv'),
-      departamento: agrupar(aprobadas, 'departamento'),
+      ciudad: agrupar(aprobadas, 'ciudad_pdv', ALIAS_CIUDAD),
+      departamento: agrupar(aprobadas, 'departamento', ALIAS_DEPARTAMENTO),
     },
     por_presentacion: Object.values(pres).sort((a, b) => b.facturas - a.facturas),
     consentimiento: { autorizo, no_autorizo: noAutorizo },
