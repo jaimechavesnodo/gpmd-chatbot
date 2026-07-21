@@ -17,6 +17,7 @@ router.get('/', requireAuth(['admin', 'agente', 'cliente', 'consulta']), async (
       facturas:gpmd_facturas ( id, estado, cliente, nit, referencia_producto, presentacion, valor_total, imagen_url, ocr_motivo_revision, created_at )
     `)
     .or(`nombre_piloto.ilike.${like},cedula.ilike.${like},vehiculo_placa.ilike.${like},codigo_preregistro.ilike.${like}`)
+    .eq('estado', 'confirmado')
     .limit(25);
 
   if (error) return res.status(500).json({ error: error.message });
