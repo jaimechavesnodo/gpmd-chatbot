@@ -116,11 +116,25 @@ function nextStep(fromIdx, data) {
   return null;
 }
 
+// Modo boletería (a pedido de Jaime, jul/2026): mientras esté activo, CUALQUIER
+// mensaje entrante recibe únicamente este aviso de venta de entradas, sin tocar la
+// máquina de estados ni guardar nada en la base de datos. Se controla por env var
+// para poder desactivarlo sin necesidad de otro deploy cuando ya no aplique.
+const MODO_BOLETERIA = () => (process.env.MODO_BOLETERIA ?? 'true').toLowerCase() !== 'false';
+const MSG_BOLETERIA = 'Hola participante del Gran Premio Mobil Delvac 2026. 🏁\n\n'
+  + 'En este link puedes comprar tus entradas 🎟️, y si eres uno de los 20 primeros en hacerlo, recibirás por este medio un código para que reclames un obsequio especial 🎁, en la tienda móvil Delvac el día del evento.\n\n'
+  + 'https://tuboletapass.checkout.tuboleta.com/selection/event/date?productId=10230456290243&advantageId=10230529214157';
+
 // ---------- Procesamiento principal ----------
 async function processIncoming(msg, send = wati.sendSessionMessage) {
   const phone = (msg.phone || '').replace(/\D/g, '');
   const text = (msg.text || '').trim();
   if (!phone) return;
+
+  if (MODO_BOLETERIA()) {
+    await send(phone, MSG_BOLETERIA);
+    return;
+  }
 
   const conv = await loadConv(phone);
 
