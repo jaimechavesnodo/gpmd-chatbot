@@ -133,6 +133,12 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
   if (!phone) return;
 
   if (MODO_BOLETERIA()) {
+    // Solo se envía la PRIMERA vez que ese número escribe; en mensajes siguientes
+    // el bot queda en silencio para no interrumpir la conversación con el agente.
+    const { data: yaEnviado } = await supabase.from('gpmd_log').select('id')
+      .eq('entidad', 'boleteria_tyc').eq('entidad_id', phone).maybeSingle();
+    if (yaEnviado) return;
+
     await send(phone, MSG_BOLETERIA);
     await send(phone, 'Consulta los Términos y Condiciones de esta actividad en el siguiente documento');
     try {
@@ -141,6 +147,7 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
     } catch (e) {
       console.error('[GPMD] no se pudo enviar el PDF de T&C de boletería:', e.message);
     }
+    await logActivity({ entidad: 'boleteria_tyc', entidadId: phone, accion: 'enviado', detalle: { phone }, fuente: 'automatico' });
     return;
   }
 
