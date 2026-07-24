@@ -8,6 +8,7 @@ const ocr = require('./ocr');
 const { logActivity } = require('../middleware/logger');
 
 const PDF_AUTORIZACION = path.join(__dirname, '..', 'assets', 'legal', 'autorizacion-datos-gpmd-2026.pdf');
+const PDF_TYC_BOLETERIA = path.join(__dirname, '..', 'assets', 'legal', 'tyc-boleteria-gpmd-2026.pdf');
 
 const TIPO_DOC = ['Cédula', 'Pasaporte', 'Otro'];
 const RH = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
@@ -133,6 +134,13 @@ async function processIncoming(msg, send = wati.sendSessionMessage) {
 
   if (MODO_BOLETERIA()) {
     await send(phone, MSG_BOLETERIA);
+    await send(phone, 'Consulta los Términos y Condiciones de esta actividad en el siguiente documento');
+    try {
+      const buffer = fs.readFileSync(PDF_TYC_BOLETERIA);
+      await wati.sendSessionFile(phone, buffer, 'Terminos-y-Condiciones-Boleteria-GPMD-2026.pdf', 'application/pdf');
+    } catch (e) {
+      console.error('[GPMD] no se pudo enviar el PDF de T&C de boletería:', e.message);
+    }
     return;
   }
 
